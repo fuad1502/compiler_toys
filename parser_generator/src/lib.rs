@@ -39,12 +39,16 @@ pub struct State {
 
 pub enum Action {
     Shift(Rc<State>),
-    Reduce(Rc<State>),
+    Reduce(Rc<Rule>),
+    Accept,
+    Error,
 }
 
 pub struct ParseTableGen {
     rules: Vec<Rc<Rule>>,
     symbols: Vec<Symbol>,
+    terminals: Vec<Terminal>,
+    non_terminals: Vec<NonTerminal>,
     first_table: HashMap<NonTerminal, Vec<Terminal>>,
     pub states: Vec<Rc<State>>,
     pub goto_table: HashMap<Rc<State>, Vec<(Symbol, Rc<State>)>>,
@@ -54,9 +58,14 @@ pub struct ParseTableGen {
 impl ParseTableGen {
     pub fn new(rules: Vec<Rule>, symbols: Vec<Symbol>) -> Self {
         let rules = rules.into_iter().map(|r| Rc::new(r)).collect();
+        let mut terminals = Self::terminals(&symbols);
+        terminals.push(Terminal::End);
+        let non_terminals = Self::non_terminals(&symbols);
         Self {
             rules,
             symbols,
+            terminals,
+            non_terminals,
             first_table: HashMap::new(),
             states: vec![],
             goto_table: HashMap::new(),
@@ -64,47 +73,41 @@ impl ParseTableGen {
         }
         .create_first_table()
         .create_states()
+        .create_action_table_for_all_states()
     }
 
     fn create_first_table(mut self) -> Self {
-        let non_terminals = self.non_terminals();
         loop {
             let mut changed = false;
-
-            for non_terminal in &non_terminals {
-                let rules = self.rules_with_head(non_terminal);
-                for rule in rules {
+            for target_non_terminal in &self.non_terminals {
+                for rule in self.rules_with_head(target_non_terminal) {
                     for symbol in &rule.symbols {
                         match symbol {
-                            Symbol::NonTerminal(production) => {
-                                if let Some(terminals) = self.first_table.get(&production) {
-                                    let terminals = terminals.clone();
-                                    for terminal in &terminals {
-                                        if self.add_terminal_to_first_table_entry(
-                                            non_terminal,
-                                            terminal,
-                                        ) {
-                                            changed = true;
-                                        }
-                                    }
-                                    if !terminals.contains(&Terminal::Empty) {
-                                        break;
-                                    }
-                                } else {
+                            Symbol::NonTerminal(non_terminal) => {
+                                changed = Self::copy_first_terminals(
+                                    &mut self.first_table,
+                                    &non_terminal,
+                                    target_non_terminal,
+                                );
+                                if !Self::first_contains_empty_terminal(
+                                    &self.first_table,
+                                    &non_terminal,
+                                ) {
                                     break;
                                 }
                             }
                             Symbol::Terminal(terminal) => {
-                                if self.add_terminal_to_first_table_entry(non_terminal, &terminal) {
-                                    changed = true;
-                                }
+                                changed = Self::add_terminal_to_first(
+                                    &mut self.first_table,
+                                    target_non_terminal,
+                                    &terminal,
+                                );
                                 break;
                             }
                         }
                     }
                 }
             }
-
             if !changed {
                 break;
             }
@@ -112,8 +115,112 @@ impl ParseTableGen {
         self
     }
 
-    fn non_terminals(&self) -> Vec<NonTerminal> {
-        self.symbols
+    fn create_states(mut self) -> Self {
+        let kernel_items = vec![Item {
+            rule: self.rules[0].clone(),
+            position: 0,
+            lookahead: Terminal::End,
+        }];
+        let state_0 = Rc::new(self.closure(kernel_items));
+        self.states.push(state_0.clone());
+        let mut unvisited_states = vec![state_0];
+
+        loop {
+            if unvisited_states.is_empty() {
+                break;
+            }
+            let current_state = unvisited_states.remove(0);
+            for symbol in &self.symbols {
+                if let Some(next_state) = self.goto(&current_state, *symbol) {
+                    let next_state = if let Some(existing_state) =
+                        self.states.iter().find(|s| ***s == next_state)
+                    {
+                        existing_state.clone()
+                    } else {
+                        let next_state = Rc::new(next_state);
+                        self.states.push(next_state.clone());
+                        unvisited_states.push(next_state.clone());
+                        next_state
+                    };
+                    Self::add_goto_entry(&mut self.goto_table, &current_state, symbol, &next_state);
+                }
+            }
+        }
+        self
+    }
+
+    fn create_action_table_for_all_states(mut self) -> Self {
+        for state in &self.states {
+            let actions = self.create_action_table_entry(state);
+            self.action_table.insert(state.clone(), actions);
+        }
+        self
+    }
+
+    fn create_action_table_entry(&self, state: &Rc<State>) -> HashMap<Terminal, Action> {
+        let mut action_map = HashMap::new();
+        for terminal in &self.terminals {
+            let action = Self::deduce_action(state, &self.goto_table, terminal);
+            action_map.insert(*terminal, action);
+        }
+        action_map
+    }
+
+    fn deduce_action(
+        state: &Rc<State>,
+        goto_table: &HashMap<Rc<State>, Vec<(Symbol, Rc<State>)>>,
+        terminal: &Terminal,
+    ) -> Action {
+        let shift_action = Self::shift_action(state, goto_table, terminal);
+        let mut reduce_actions = Self::reduce_actions(state, terminal);
+        match (shift_action, reduce_actions.len()) {
+            (Some(action), 0) => action,
+            (None, 1) => reduce_actions.pop().unwrap(),
+            (None, 0) => Action::Error,
+            _ => panic!("Ambigous grammar!"),
+        }
+    }
+
+    fn shift_action(
+        state: &Rc<State>,
+        goto_table: &HashMap<Rc<State>, Vec<(Symbol, Rc<State>)>>,
+        terminal: &Terminal,
+    ) -> Option<Action> {
+        if !goto_table.contains_key(state) {
+            return None;
+        }
+        goto_table
+            .get(state)
+            .unwrap()
+            .iter()
+            .filter(|(symbol, _)| *symbol == Symbol::Terminal(*terminal))
+            .next()
+            .map(|(_, state)| Action::Shift(state.clone()))
+    }
+
+    fn reduce_actions(state: &Rc<State>, terminal: &Terminal) -> Vec<Action> {
+        state
+            .items
+            .iter()
+            .filter(|i| i.lookahead == *terminal)
+            .filter(|i| i.symbol_right_of_dot().is_none())
+            .map(|i| Action::Reduce(i.rule.clone()))
+            .collect()
+    }
+
+    fn terminals(symbols: &Vec<Symbol>) -> Vec<Terminal> {
+        symbols
+            .iter()
+            .filter_map(|s| match s {
+                Symbol::Terminal(t) => Some(t),
+                _ => None,
+            })
+            .copied()
+            .collect()
+    }
+
+    fn non_terminals(symbols: &Vec<Symbol>) -> Vec<NonTerminal> {
+        symbols
             .iter()
             .filter_map(|s| match s {
                 Symbol::NonTerminal(nt) => Some(nt),
@@ -131,59 +238,52 @@ impl ParseTableGen {
             .collect()
     }
 
-    fn copy_non_terminal_first_entries() {
-        todo!()
+    fn copy_first_terminals(
+        first_table: &mut HashMap<NonTerminal, Vec<Terminal>>,
+        from: &NonTerminal,
+        to: &NonTerminal,
+    ) -> bool {
+        if !first_table.contains_key(from) {
+            return false;
+        }
+        let mut changed = false;
+        let terminals = first_table.get(from).unwrap().clone();
+        for terminal in &terminals {
+            if Self::add_terminal_to_first(first_table, to, terminal) {
+                changed = true;
+            }
+        }
+        changed
     }
 
-    fn add_terminal_to_first_table_entry(
-        &mut self,
+    fn first_contains_empty_terminal(
+        first_table: &HashMap<NonTerminal, Vec<Terminal>>,
+        non_terminal: &NonTerminal,
+    ) -> bool {
+        if !first_table.contains_key(non_terminal) {
+            return false;
+        }
+        first_table
+            .get(non_terminal)
+            .unwrap()
+            .contains(&Terminal::Empty)
+    }
+
+    fn add_terminal_to_first(
+        first_table: &mut HashMap<NonTerminal, Vec<Terminal>>,
         non_terminal: &NonTerminal,
         terminal: &Terminal,
     ) -> bool {
-        if let Some(terminals) = self.first_table.get_mut(non_terminal) {
+        if let Some(terminals) = first_table.get_mut(non_terminal) {
             if terminals.contains(terminal) {
                 return false;
             }
             terminals.push(*terminal);
             true
         } else {
-            self.first_table.insert(*non_terminal, vec![*terminal]);
+            first_table.insert(*non_terminal, vec![*terminal]);
             true
         }
-    }
-
-    fn create_states(mut self) -> Self {
-        let kernel_items = vec![Item {
-            rule: self.rules[0].clone(),
-            position: 0,
-            lookahead: Terminal::End,
-        }];
-        let state_0 = Rc::new(self.closure(kernel_items));
-        self.states.push(state_0.clone());
-        let mut unvisited_states = vec![state_0];
-
-        loop {
-            if unvisited_states.is_empty() {
-                break;
-            }
-            let state = unvisited_states.pop().unwrap();
-            for symbol in &self.symbols {
-                if let Some(next_state) = self.goto(&state, *symbol) {
-                    let next_state = if let Some(existing_state) =
-                        self.states.iter().find(|s| ***s == next_state)
-                    {
-                        existing_state.clone()
-                    } else {
-                        let next_state = Rc::new(next_state);
-                        self.states.push(next_state.clone());
-                        unvisited_states.push(next_state.clone());
-                        next_state
-                    };
-                    Self::add_goto_entry(&mut self.goto_table, &state, symbol, &next_state);
-                }
-            }
-        }
-        self
     }
 
     fn add_goto_entry(
