@@ -2,6 +2,8 @@ pub mod code_gen;
 pub mod parse_table_gen;
 pub mod yalr_parser;
 
+use std::rc::Rc;
+
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
 pub struct Rule {
     head: NonTerminal,
@@ -24,6 +26,12 @@ pub enum Terminal {
     End,
     Empty,
     Other(usize),
+}
+
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub enum TerminalOrRule {
+    Terminal(Terminal),
+    Rule(Rc<Rule>),
 }
 
 impl Rule {

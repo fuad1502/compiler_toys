@@ -1,7 +1,7 @@
 use core::{cmp::PartialEq, hash::Hash};
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{NonTerminal, Rule, Symbol, Terminal, yalr_parser::YalrFile};
+use crate::{NonTerminal, Rule, Symbol, Terminal, TerminalOrRule, yalr_parser::YalrFile};
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
 struct Item {
@@ -15,6 +15,7 @@ pub struct State {
     items: Vec<Item>,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum Action {
     Shift(Rc<State>),
     Reduce(Rc<Rule>),
@@ -28,6 +29,7 @@ pub struct ParseTableGen {
     rules: Vec<Rc<Rule>>,
     symbols: Vec<Symbol>,
     first_table: HashMap<NonTerminal, Vec<Terminal>>,
+    priorities: HashMap<TerminalOrRule, (usize, usize, usize)>,
     pub states: Vec<Rc<State>>,
     pub goto_table: HashMap<Rc<State>, HashMap<Symbol, Rc<State>>>,
     pub action_table: HashMap<Rc<State>, HashMap<Terminal, Action>>,
@@ -39,16 +41,16 @@ impl ParseTableGen {
     pub fn new(yalr_file: &YalrFile) -> Self {
         let terminals = yalr_file.terminals.iter().map(|t| t.0).collect();
         let non_terminals = yalr_file.non_terminals.iter().map(|t| t.0).collect();
-        let rules: Vec<Rc<Rule>> = yalr_file.rules.iter().map(|r| Rc::new(r.clone())).collect();
         let symbols = Self::chain_as_symbols(&terminals, &non_terminals);
         let mut rule_to_index = HashMap::new();
-        for (idx, rule) in rules.iter().enumerate() {
+        for (idx, rule) in yalr_file.rules.iter().enumerate() {
             rule_to_index.insert(rule.clone(), idx);
         }
         Self {
             terminals,
             non_terminals,
-            rules,
+            priorities: yalr_file.priorities.clone(),
+            rules: yalr_file.rules.clone(),
             symbols,
             first_table: HashMap::new(),
             states: vec![],
@@ -156,7 +158,11 @@ impl ParseTableGen {
     fn create_action_table_entry(&self, state: &Rc<State>) -> HashMap<Terminal, Action> {
         let mut action_map = HashMap::new();
         for terminal in &self.terminals {
-            let action = Self::deduce_action(state, &self.goto_table, terminal);
+            let mut action =
+                Self::deduce_action(state, &self.goto_table, terminal, &self.priorities);
+            if action == Action::Reduce(self.rules[0].clone()) {
+                action = Action::Accept;
+            }
             action_map.insert(*terminal, action);
         }
         action_map
@@ -166,6 +172,7 @@ impl ParseTableGen {
         state: &Rc<State>,
         goto_table: &HashMap<Rc<State>, HashMap<Symbol, Rc<State>>>,
         terminal: &Terminal,
+        priorities: &HashMap<TerminalOrRule, (usize, usize, usize)>,
     ) -> Action {
         let shift_action = Self::shift_action(state, goto_table, terminal);
         let mut reduce_actions = Self::reduce_actions(state, terminal);
@@ -173,8 +180,42 @@ impl ParseTableGen {
             (Some(action), 0) => action,
             (None, 1) => reduce_actions.pop().unwrap(),
             (None, 0) => Action::Error,
-            _ => panic!("Ambigous grammar!"),
+            (shift_action, _) => {
+                Self::resolve_ambiguity(terminal, shift_action, reduce_actions, priorities)
+            }
         }
+    }
+
+    fn resolve_ambiguity(
+        terminal: &Terminal,
+        shift_action: Option<Action>,
+        reduce_actions: Vec<Action>,
+        priorities: &HashMap<TerminalOrRule, (usize, usize, usize)>,
+    ) -> Action {
+        let mut actions = reduce_actions;
+        if let Some(action) = shift_action {
+            actions.push(action);
+        }
+        actions
+            .into_iter()
+            .map(|a| match a {
+                Action::Shift(next_state) => (
+                    Action::Shift(next_state),
+                    priorities
+                        .get(&TerminalOrRule::Terminal(*terminal))
+                        .unwrap_or(&(0, 1, 0)),
+                ),
+                Action::Reduce(x) => (
+                    Action::Reduce(x.clone()),
+                    priorities
+                        .get(&TerminalOrRule::Rule(x))
+                        .unwrap_or(&(0, 0, 0)),
+                ),
+                _ => unreachable!(),
+            })
+            .max_by_key(|(_, pri)| **pri)
+            .unwrap()
+            .0
     }
 
     fn shift_action(

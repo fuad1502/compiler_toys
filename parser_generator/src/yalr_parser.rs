@@ -1,12 +1,80 @@
-use crate::{NonTerminal, Rule, Symbol, Terminal};
+use std::collections::HashMap;
+use std::rc::Rc;
+
+use crate::{NonTerminal, Rule, Symbol, Terminal, TerminalOrRule};
 
 pub struct YalrFile {
     pub terminals: Vec<(Terminal, String)>,
     pub non_terminals: Vec<(NonTerminal, String)>,
-    pub rules: Vec<Rule>,
+    pub rules: Vec<Rc<Rule>>,
+    pub priorities: HashMap<TerminalOrRule, (usize, usize, usize)>,
 }
 
 impl YalrFile {
+    pub fn simple_calculator() -> Self {
+        let s_acc = NonTerminal { id: 0 };
+        let e = NonTerminal { id: 2 };
+        let number = Terminal::Other(0);
+        let plus = Terminal::Other(1);
+        let star = Terminal::Other(2);
+        let left_paren = Terminal::Other(3);
+        let right_paren = Terminal::Other(4);
+
+        let rule_acc = Rule {
+            head: s_acc,
+            symbols: vec![Symbol::NonTerminal(e)],
+        };
+        let rule_0 = Rule {
+            head: e,
+            symbols: vec![
+                Symbol::NonTerminal(e),
+                Symbol::Terminal(plus),
+                Symbol::NonTerminal(e),
+            ],
+        };
+        let rule_1 = Rule {
+            head: e,
+            symbols: vec![
+                Symbol::NonTerminal(e),
+                Symbol::Terminal(star),
+                Symbol::NonTerminal(e),
+            ],
+        };
+        let rule_2 = Rule {
+            head: e,
+            symbols: vec![
+                Symbol::Terminal(left_paren),
+                Symbol::NonTerminal(e),
+                Symbol::Terminal(right_paren),
+            ],
+        };
+        let rule_3 = Rule {
+            head: e,
+            symbols: vec![Symbol::Terminal(number)],
+        };
+
+        let non_terminal_names = vec!["SAcc".to_string(), "E".to_string()];
+        let terminal_names = vec![
+            "Number".to_string(),
+            "Plus".to_string(),
+            "Star".to_string(),
+            "LeftParen".to_string(),
+            "RightParen".to_string(),
+            "End".to_string(),
+        ];
+        let terminals = vec![number, plus, star, left_paren, right_paren, Terminal::End];
+        let non_terminals = vec![s_acc, e];
+        let rules = vec![rule_acc, rule_0, rule_1, rule_2, rule_3];
+        let rules = rules.into_iter().map(|r| Rc::new(r)).collect();
+
+        YalrFile {
+            terminals: terminals.into_iter().zip(terminal_names).collect(),
+            non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
+            rules,
+            priorities: HashMap::new(),
+        }
+    }
+
     pub fn example() -> Self {
         let s_acc = NonTerminal { id: 0 };
         let s = NonTerminal { id: 1 };
@@ -36,11 +104,13 @@ impl YalrFile {
         let terminals = vec![c, d, Terminal::End];
         let non_terminals = vec![s_acc, s, e];
         let rules = vec![rule_acc, rule_0, rule_1, rule_2];
+        let rules = rules.into_iter().map(|r| Rc::new(r)).collect();
 
         YalrFile {
             terminals: terminals.into_iter().zip(terminal_names).collect(),
             non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
             rules,
+            priorities: HashMap::new(),
         }
     }
 }

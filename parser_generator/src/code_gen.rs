@@ -3,6 +3,7 @@ use std::{
     fs::{File, OpenOptions},
     io::Write,
     path::Path,
+    rc::Rc,
 };
 
 use crate::{
@@ -15,7 +16,7 @@ pub struct CodeGen {
     parse_table_gen: ParseTableGen,
     terminals: Vec<(Terminal, String)>,
     non_terminals: Vec<(NonTerminal, String)>,
-    rules: Vec<Rule>,
+    rules: Vec<Rc<Rule>>,
 }
 
 impl CodeGen {
@@ -123,7 +124,7 @@ impl CodeGen {
             tabs.indent();
             for (terminal, _) in &self.terminals {
                 let action = &self.parse_table_gen.action_table[state][terminal];
-                writeln!(parser_file, "{tabs}{},", self.action_string(action))?;
+                writeln!(parser_file, "{tabs}Action::{},", self.action_string(action))?;
             }
             tabs.deindent();
             writeln!(parser_file, "{tabs}],")?;
