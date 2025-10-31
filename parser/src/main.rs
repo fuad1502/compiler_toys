@@ -171,7 +171,7 @@ impl Parser {
     fn reduce_rule(&mut self, rule_number: usize) {
         let non_terminal_class = self.rule_heads[&rule_number];
         let rule = Rule {
-            number: 1,
+            number: rule_number,
             components: self.get_top_symbols(self.rule_component_counts[&rule_number]),
         };
         let non_terminal = NonTerminal {
