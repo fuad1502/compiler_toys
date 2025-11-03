@@ -28,6 +28,13 @@ pub enum Terminal {
     Other(usize),
 }
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct Priority {
+    assigned_priority: Option<usize>,
+    is_shift: Option<bool>,
+    rule_order: Option<usize>,
+}
+
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub enum TerminalOrRule {
     Terminal(Terminal),
@@ -41,5 +48,31 @@ impl Rule {
 
     pub fn head(&self) -> &NonTerminal {
         &self.head
+    }
+}
+
+impl Priority {
+    pub fn new(priority: usize) -> Self {
+        Self {
+            assigned_priority: Some(priority),
+            is_shift: None,
+            rule_order: None,
+        }
+    }
+
+    pub fn shift() -> Self {
+        Self {
+            assigned_priority: None,
+            is_shift: Some(true),
+            rule_order: None,
+        }
+    }
+
+    pub fn reduce(rule_order: usize) -> Self {
+        Self {
+            assigned_priority: None,
+            is_shift: Some(false),
+            rule_order: Some(rule_order),
+        }
     }
 }

@@ -1,7 +1,7 @@
 use core::{cmp::PartialEq, hash::Hash};
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{NonTerminal, Rule, Symbol, Terminal, TerminalOrRule, yalr_parser::YalrFile};
+use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule, yalr_parser::YalrFile};
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
 struct Item {
@@ -29,7 +29,7 @@ pub struct ParseTableGen {
     rules: Vec<Rc<Rule>>,
     symbols: Vec<Symbol>,
     first_table: HashMap<NonTerminal, Vec<Terminal>>,
-    priorities: HashMap<TerminalOrRule, (usize, usize, usize)>,
+    priorities: HashMap<TerminalOrRule, Priority>,
     pub states: Vec<Rc<State>>,
     pub goto_table: HashMap<Rc<State>, HashMap<Symbol, Rc<State>>>,
     pub action_table: HashMap<Rc<State>, HashMap<Terminal, Action>>,
@@ -158,8 +158,7 @@ impl ParseTableGen {
     fn create_action_table_entry(&self, state: &Rc<State>) -> HashMap<Terminal, Action> {
         let mut action_map = HashMap::new();
         for terminal in &self.terminals {
-            let mut action =
-                Self::deduce_action(state, &self.goto_table, terminal, &self.priorities);
+            let mut action = self.deduce_action(state, terminal);
             if action == Action::Reduce(self.rules[0].clone()) {
                 action = Action::Accept;
             }
@@ -168,29 +167,22 @@ impl ParseTableGen {
         action_map
     }
 
-    fn deduce_action(
-        state: &Rc<State>,
-        goto_table: &HashMap<Rc<State>, HashMap<Symbol, Rc<State>>>,
-        terminal: &Terminal,
-        priorities: &HashMap<TerminalOrRule, (usize, usize, usize)>,
-    ) -> Action {
-        let shift_action = Self::shift_action(state, goto_table, terminal);
+    fn deduce_action(&self, state: &Rc<State>, terminal: &Terminal) -> Action {
+        let shift_action = Self::shift_action(state, &self.goto_table, terminal);
         let mut reduce_actions = Self::reduce_actions(state, terminal);
         match (shift_action, reduce_actions.len()) {
             (Some(action), 0) => action,
             (None, 1) => reduce_actions.pop().unwrap(),
             (None, 0) => Action::Error,
-            (shift_action, _) => {
-                Self::resolve_ambiguity(terminal, shift_action, reduce_actions, priorities)
-            }
+            (shift_action, _) => self.resolve_ambiguity(terminal, shift_action, reduce_actions),
         }
     }
 
     fn resolve_ambiguity(
+        &self,
         terminal: &Terminal,
         shift_action: Option<Action>,
         reduce_actions: Vec<Action>,
-        priorities: &HashMap<TerminalOrRule, (usize, usize, usize)>,
     ) -> Action {
         let mut actions = reduce_actions;
         if let Some(action) = shift_action {
@@ -198,22 +190,24 @@ impl ParseTableGen {
         }
         actions
             .into_iter()
-            .map(|a| match a {
+            .map(|action| match action {
                 Action::Shift(next_state) => (
                     Action::Shift(next_state),
-                    priorities
+                    self.priorities
                         .get(&TerminalOrRule::Terminal(*terminal))
-                        .unwrap_or(&(0, 1, 0)),
+                        .cloned()
+                        .unwrap_or(Priority::shift()),
                 ),
-                Action::Reduce(x) => (
-                    Action::Reduce(x.clone()),
-                    priorities
-                        .get(&TerminalOrRule::Rule(x))
-                        .unwrap_or(&(0, 0, 0)),
+                Action::Reduce(rule) => (
+                    Action::Reduce(rule.clone()),
+                    self.priorities
+                        .get(&TerminalOrRule::Rule(rule.clone()))
+                        .cloned()
+                        .unwrap_or(Priority::reduce(self.get_rule_index(&*rule))),
                 ),
-                _ => unreachable!(),
+                _ => unreachable!("conflict resolution are only between shifts and/or reduces"),
             })
-            .max_by_key(|(_, pri)| **pri)
+            .max_by_key(|(_, pri)| pri.clone())
             .unwrap()
             .0
     }

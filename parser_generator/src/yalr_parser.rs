@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::{NonTerminal, Rule, Symbol, Terminal, TerminalOrRule};
+use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule};
 
 pub struct YalrFile {
     pub terminals: Vec<(Terminal, String)>,
     pub non_terminals: Vec<(NonTerminal, String)>,
     pub rules: Vec<Rc<Rule>>,
-    pub priorities: HashMap<TerminalOrRule, (usize, usize, usize)>,
+    pub priorities: HashMap<TerminalOrRule, Priority>,
 }
 
 impl YalrFile {
@@ -65,13 +65,19 @@ impl YalrFile {
         let terminals = vec![number, plus, star, left_paren, right_paren, Terminal::End];
         let non_terminals = vec![s_acc, e];
         let rules = vec![rule_acc, rule_0, rule_1, rule_2, rule_3];
-        let rules = rules.into_iter().map(|r| Rc::new(r)).collect();
+        let rules: Vec<Rc<Rule>> = rules.into_iter().map(|r| Rc::new(r)).collect();
+        let mut priorities = HashMap::new();
+
+        priorities.insert(TerminalOrRule::Rule(rules[2].clone()), Priority::new(4));
+        priorities.insert(TerminalOrRule::Terminal(terminals[2]), Priority::new(3));
+        priorities.insert(TerminalOrRule::Rule(rules[1].clone()), Priority::new(2));
+        priorities.insert(TerminalOrRule::Terminal(terminals[1]), Priority::new(1));
 
         YalrFile {
             terminals: terminals.into_iter().zip(terminal_names).collect(),
             non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
             rules,
-            priorities: HashMap::new(),
+            priorities,
         }
     }
 

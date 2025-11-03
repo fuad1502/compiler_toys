@@ -282,11 +282,11 @@ impl CodeGen {
     }}
 
     fn get_action(&self, terminal_class: TerminalClass) -> Action {{
-        self.actions[self.current_state_number()][terminal_class]
+        self.actions[self.current_state_number()][terminal_class as usize]
     }}
 
     fn next(&self, non_terminal_class: NonTerminalClass) -> usize {{
-        self.next_states[self.current_state_number()][non_terminal_class].unwrap()
+        self.next_states[self.current_state_number()][non_terminal_class as usize].unwrap()
     }}
 
     fn current_state_number(&self) -> usize {{
