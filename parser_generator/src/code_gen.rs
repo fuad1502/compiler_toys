@@ -9,7 +9,7 @@ use std::{
 use crate::{
     NonTerminal, Rule, Symbol, Terminal,
     parse_table_gen::{Action, ParseTableGen},
-    yalr_parser::YalrFile,
+    yalr_file::YalrFile,
 };
 
 pub struct CodeGen {

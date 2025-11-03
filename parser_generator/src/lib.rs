@@ -1,6 +1,6 @@
 pub mod code_gen;
 pub mod parse_table_gen;
-pub mod yalr_parser;
+pub mod yalr_file;
 
 use std::rc::Rc;
 

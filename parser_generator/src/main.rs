@@ -1,7 +1,7 @@
 use core::convert::From;
 use std::path::PathBuf;
 
-use parser_generator::{code_gen::CodeGen, yalr_parser::YalrFile};
+use parser_generator::{code_gen::CodeGen, yalr_file::YalrFile};
 
 fn main() {
     let yalr_file = YalrFile::simple_calculator();

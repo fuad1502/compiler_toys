@@ -1,5 +1,8 @@
-use std::collections::HashMap;
+mod lexer;
+mod parser;
+
 use std::rc::Rc;
+use std::{collections::HashMap, path::Path};
 
 use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule};
 
@@ -11,6 +14,12 @@ pub struct YalrFile {
 }
 
 impl YalrFile {
+    pub fn new(yalr_file: &Path) -> Self {
+        let lexer = lexer::Lexer::new(yalr_file);
+        let parser = parser::Parser::new();
+        parser.parse(lexer.unwrap()).unwrap()
+    }
+
     pub fn simple_calculator() -> Self {
         let s_acc = NonTerminal { id: 0 };
         let e = NonTerminal { id: 2 };

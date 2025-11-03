@@ -1,7 +1,7 @@
 use core::{cmp::PartialEq, hash::Hash};
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule, yalr_parser::YalrFile};
+use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule, yalr_file::YalrFile};
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
 struct Item {
@@ -395,7 +395,7 @@ impl Item {
 mod test {
     use core::assert_eq;
 
-    use crate::{parse_table_gen::ParseTableGen, yalr_parser::YalrFile};
+    use crate::{parse_table_gen::ParseTableGen, yalr_file::YalrFile};
 
     #[test]
     fn test() {
