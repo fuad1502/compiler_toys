@@ -179,8 +179,8 @@ impl Lexer {
                 Some(';') => {
                     return Ok(Token::semicolon(self.start_pos));
                 }
+                Some('%') => return self.read_section_id(),
                 Some(c) if c.is_ascii_digit() => return self.read_number(),
-                Some(c) if c == '%' => return self.read_section_id(),
                 Some(c) if c.is_ascii_alphabetic() => return self.read_id(c),
                 Some(c) => return Err(Error::UnexpectedChar(c, "")),
                 None => return Ok(Token::end(self.start_pos)),
@@ -210,10 +210,10 @@ impl Lexer {
         }
         let id = String::from_utf8(id).unwrap();
         match &id[..] {
-            "TERMINALS" => return Ok(Token::terminals_section(self.start_pos)),
-            "RULES" => return Ok(Token::rules_section(self.start_pos)),
-            "PRIORITIES" => return Ok(Token::priorities_section(self.start_pos)),
-            _ => return Err(Error::UnrecognizedSectionId(id)),
+            "TERMINALS" => Ok(Token::terminals_section(self.start_pos)),
+            "RULES" => Ok(Token::rules_section(self.start_pos)),
+            "PRIORITIES" => Ok(Token::priorities_section(self.start_pos)),
+            _ => Err(Error::UnrecognizedSectionId(id)),
         }
     }
 
@@ -257,7 +257,7 @@ impl Lexer {
         let ch = self.peek_char();
         if ch.is_some() && predicate(ch.unwrap()) {
             self.current_pos += 1;
-            return ch.map(|c| c as char);
+            return ch;
         }
         None
     }

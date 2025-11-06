@@ -39,8 +39,8 @@ pub struct ParseTableGen {
 
 impl ParseTableGen {
     pub fn new(yalr_file: &YalrFile) -> Self {
-        let terminals = yalr_file.terminals.iter().map(|t| t.0).collect();
-        let non_terminals = yalr_file.non_terminals.iter().map(|t| t.0).collect();
+        let terminals: Vec<Terminal> = yalr_file.terminals.iter().map(|t| t.0).collect();
+        let non_terminals: Vec<NonTerminal> = yalr_file.non_terminals.iter().map(|t| t.0).collect();
         let symbols = Self::chain_as_symbols(&terminals, &non_terminals);
         let mut rule_to_index = HashMap::new();
         for (idx, rule) in yalr_file.rules.iter().enumerate() {
@@ -82,12 +82,12 @@ impl ParseTableGen {
                             Symbol::NonTerminal(non_terminal) => {
                                 changed = Self::copy_first_terminals(
                                     &mut self.first_table,
-                                    &non_terminal,
+                                    non_terminal,
                                     target_non_terminal,
                                 );
                                 if !Self::first_contains_empty_terminal(
                                     &self.first_table,
-                                    &non_terminal,
+                                    non_terminal,
                                 ) {
                                     break;
                                 }
@@ -96,7 +96,7 @@ impl ParseTableGen {
                                 changed = Self::add_terminal_to_first(
                                     &mut self.first_table,
                                     target_non_terminal,
-                                    &terminal,
+                                    terminal,
                                 );
                                 break;
                             }
@@ -203,7 +203,7 @@ impl ParseTableGen {
                     self.priorities
                         .get(&TerminalOrRule::Rule(rule.clone()))
                         .cloned()
-                        .unwrap_or(Priority::reduce(self.get_rule_index(&*rule))),
+                        .unwrap_or(Priority::reduce(self.get_rule_index(&rule))),
                 ),
                 _ => unreachable!("conflict resolution are only between shifts and/or reduces"),
             })
@@ -224,8 +224,7 @@ impl ParseTableGen {
             .get(state)
             .unwrap()
             .iter()
-            .filter(|(symbol, _)| **symbol == Symbol::Terminal(*terminal))
-            .next()
+            .find(|(symbol, _)| **symbol == Symbol::Terminal(*terminal))
             .map(|(_, state)| Action::Shift(state.clone()))
     }
 
@@ -239,10 +238,7 @@ impl ParseTableGen {
             .collect()
     }
 
-    fn chain_as_symbols(
-        terminals: &Vec<Terminal>,
-        non_terminals: &Vec<NonTerminal>,
-    ) -> Vec<Symbol> {
+    fn chain_as_symbols(terminals: &[Terminal], non_terminals: &[NonTerminal]) -> Vec<Symbol> {
         let terminals = terminals.iter().map(|t| Symbol::Terminal(*t));
         let non_terminals = non_terminals.iter().map(|nt| Symbol::NonTerminal(*nt));
         terminals.chain(non_terminals).collect()

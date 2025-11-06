@@ -74,7 +74,7 @@ impl YalrFile {
         let terminals = vec![number, plus, star, left_paren, right_paren, Terminal::End];
         let non_terminals = vec![s_acc, e];
         let rules = vec![rule_acc, rule_0, rule_1, rule_2, rule_3];
-        let rules: Vec<Rc<Rule>> = rules.into_iter().map(|r| Rc::new(r)).collect();
+        let rules: Vec<Rc<Rule>> = rules.into_iter().map(Rc::new).collect();
         let mut priorities = HashMap::new();
 
         priorities.insert(TerminalOrRule::Rule(rules[2].clone()), Priority::new(4));
@@ -119,7 +119,7 @@ impl YalrFile {
         let terminals = vec![c, d, Terminal::End];
         let non_terminals = vec![s_acc, s, e];
         let rules = vec![rule_acc, rule_0, rule_1, rule_2];
-        let rules = rules.into_iter().map(|r| Rc::new(r)).collect();
+        let rules = rules.into_iter().map(Rc::new).collect();
 
         YalrFile {
             terminals: terminals.into_iter().zip(terminal_names).collect(),
