@@ -398,7 +398,7 @@ mod test {
     use crate::{parse_table_gen::ParseTableGen, yalr_file::YalrFile};
 
     #[test]
-    fn test() {
+    fn main() {
         let yalr_file = YalrFile::example();
         let parse_table_gen = ParseTableGen::new(&yalr_file);
         assert_eq!(parse_table_gen.states.len(), 10);

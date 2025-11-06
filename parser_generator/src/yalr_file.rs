@@ -14,10 +14,10 @@ pub struct YalrFile {
 }
 
 impl YalrFile {
-    pub fn new(yalr_file: &Path) -> Self {
-        let lexer = lexer::Lexer::new(yalr_file);
-        let parser = parser::Parser::new();
-        parser.parse(lexer.unwrap()).unwrap()
+    pub fn new(yalr_file: &Path) -> Result<Self, String> {
+        let lexer = lexer::Lexer::new(yalr_file).map_err(|e| format!("IO error: {e}"))?;
+        let parser = parser::Parser::new(lexer);
+        parser.parse()
     }
 
     pub fn simple_calculator() -> Self {

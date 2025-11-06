@@ -1,4 +1,4 @@
-%TOKENS
+%TERMINALS
 Number Plus Star LeftParen RightParen
 %RULES
 E = E Plus E

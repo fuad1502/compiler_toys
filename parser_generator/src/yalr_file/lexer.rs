@@ -1,21 +1,21 @@
 use std::{fs::File, io::Read, path::Path};
 
 #[derive(Clone)]
-pub struct Terminal {
+pub struct Token {
     start_pos: usize,
     end_pos: usize,
-    class: TerminalClass,
+    class: TokenClass,
 }
 
-impl Terminal {
-    pub fn class(&self) -> TerminalClass {
+impl Token {
+    pub fn class(&self) -> TokenClass {
         self.class
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TerminalClass {
-    TokensSection,
+pub enum TokenClass {
+    TerminalsSection,
     RulesSection,
     PrioritiesSection,
     Identifier,
@@ -28,12 +28,12 @@ pub enum TerminalClass {
     End,
 }
 
-impl Terminal {
+impl Token {
     fn left_paren(start_pos: usize) -> Self {
         Self {
             start_pos,
             end_pos: start_pos + 1,
-            class: TerminalClass::LeftParen,
+            class: TokenClass::LeftParen,
         }
     }
 
@@ -41,7 +41,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + 1,
-            class: TerminalClass::RightParen,
+            class: TokenClass::RightParen,
         }
     }
 
@@ -49,7 +49,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + 1,
-            class: TerminalClass::Assignment,
+            class: TokenClass::Assignment,
         }
     }
 
@@ -57,7 +57,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + 1,
-            class: TerminalClass::Or,
+            class: TokenClass::Or,
         }
     }
 
@@ -65,7 +65,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + 1,
-            class: TerminalClass::Semicolon,
+            class: TokenClass::Semicolon,
         }
     }
 
@@ -73,15 +73,15 @@ impl Terminal {
         Self {
             start_pos,
             end_pos,
-            class: TerminalClass::Number,
+            class: TokenClass::Number,
         }
     }
 
-    fn tokens_section(start_pos: usize) -> Self {
+    fn terminals_section(start_pos: usize) -> Self {
         Self {
             start_pos,
-            end_pos: start_pos + "%TOKENS".len(),
-            class: TerminalClass::TokensSection,
+            end_pos: start_pos + "%TERMINALS".len(),
+            class: TokenClass::TerminalsSection,
         }
     }
 
@@ -89,7 +89,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + "%RULES".len(),
-            class: TerminalClass::RulesSection,
+            class: TokenClass::RulesSection,
         }
     }
 
@@ -97,7 +97,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + "%PRIORITIES".len(),
-            class: TerminalClass::PrioritiesSection,
+            class: TokenClass::PrioritiesSection,
         }
     }
 
@@ -105,7 +105,7 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos + id.len(),
-            class: TerminalClass::Identifier,
+            class: TokenClass::Identifier,
         }
     }
 
@@ -113,47 +113,51 @@ impl Terminal {
         Self {
             start_pos,
             end_pos: start_pos,
-            class: TerminalClass::End,
+            class: TokenClass::End,
         }
     }
 }
 
 pub struct Lexer {
-    chars: Vec<char>,
+    chars: Vec<u8>,
     start_pos: usize,
     current_pos: usize,
-    current_terminal: Option<Terminal>,
+    current_token: Option<Token>,
 }
 
 impl Lexer {
-    pub fn new(yalr_file: &Path) -> Result<Self, Error> {
+    pub fn new(yalr_file: &Path) -> Result<Self, std::io::Error> {
         let mut file = File::open(yalr_file)?;
         let mut source = String::new();
         let _ = file.read_to_string(&mut source)?;
-        let chars = source.chars().collect();
+        let chars = source.chars().map(|c| c as u8).collect();
         Ok(Self {
             chars,
             start_pos: 0,
             current_pos: 0,
-            current_terminal: None,
+            current_token: None,
         })
     }
 
-    pub fn next(&mut self) -> Result<Terminal, Error> {
-        let terminal = self.peek()?.clone();
+    pub fn next(&mut self) -> Result<Token, Error> {
+        let token = self.peek()?.clone();
         self.move_start_pos();
-        self.current_terminal = None;
-        Ok(terminal)
+        self.current_token = None;
+        Ok(token)
     }
 
-    pub fn peek(&mut self) -> Result<&Terminal, Error> {
-        if self.current_terminal.is_none() {
-            self.current_terminal = Some(self.get()?);
+    pub fn peek(&mut self) -> Result<&Token, Error> {
+        if self.current_token.is_none() {
+            self.current_token = Some(self.get()?);
         }
-        Ok(self.current_terminal.as_ref().unwrap())
+        Ok(self.current_token.as_ref().unwrap())
     }
 
-    fn get(&mut self) -> Result<Terminal, Error> {
+    pub fn get_lexeme(&self, token: &Token) -> &str {
+        str::from_utf8(&self.chars[token.start_pos..token.end_pos]).unwrap()
+    }
+
+    fn get(&mut self) -> Result<Token, Error> {
         loop {
             match self.read_char() {
                 Some(c) if c.is_whitespace() => {
@@ -161,30 +165,30 @@ impl Lexer {
                     continue;
                 }
                 Some('(') => {
-                    return Ok(Terminal::left_paren(self.start_pos));
+                    return Ok(Token::left_paren(self.start_pos));
                 }
                 Some(')') => {
-                    return Ok(Terminal::right_paren(self.start_pos));
+                    return Ok(Token::right_paren(self.start_pos));
                 }
                 Some('=') => {
-                    return Ok(Terminal::assignment(self.start_pos));
+                    return Ok(Token::assignment(self.start_pos));
                 }
                 Some('|') => {
-                    return Ok(Terminal::or(self.start_pos));
+                    return Ok(Token::or(self.start_pos));
                 }
                 Some(';') => {
-                    return Ok(Terminal::semicolon(self.start_pos));
+                    return Ok(Token::semicolon(self.start_pos));
                 }
                 Some(c) if c.is_ascii_digit() => return self.read_number(),
                 Some(c) if c == '%' => return self.read_section_id(),
                 Some(c) if c.is_ascii_alphabetic() => return self.read_id(c),
                 Some(c) => return Err(Error::UnexpectedChar(c, "")),
-                None => return Ok(Terminal::end(self.start_pos)),
+                None => return Ok(Token::end(self.start_pos)),
             };
         }
     }
 
-    fn read_number(&mut self) -> Result<Terminal, Error> {
+    fn read_number(&mut self) -> Result<Token, Error> {
         loop {
             match self.read_char_if(|c| !Self::is_terminator(c)) {
                 Some(c) if c.is_ascii_digit() => continue,
@@ -192,10 +196,10 @@ impl Lexer {
                 None => break,
             }
         }
-        Ok(Terminal::number(self.start_pos, self.current_pos))
+        Ok(Token::number(self.start_pos, self.current_pos))
     }
 
-    fn read_section_id(&mut self) -> Result<Terminal, Error> {
+    fn read_section_id(&mut self) -> Result<Token, Error> {
         let mut id = vec![];
         loop {
             match self.read_char_if(|c| !Self::is_terminator(c)) {
@@ -206,14 +210,14 @@ impl Lexer {
         }
         let id = String::from_utf8(id).unwrap();
         match &id[..] {
-            "TOKENS" => return Ok(Terminal::tokens_section(self.start_pos)),
-            "RULES" => return Ok(Terminal::rules_section(self.start_pos)),
-            "PRIORITIES" => return Ok(Terminal::priorities_section(self.start_pos)),
+            "TERMINALS" => return Ok(Token::terminals_section(self.start_pos)),
+            "RULES" => return Ok(Token::rules_section(self.start_pos)),
+            "PRIORITIES" => return Ok(Token::priorities_section(self.start_pos)),
             _ => return Err(Error::UnrecognizedSectionId(id)),
         }
     }
 
-    fn read_id(&mut self, first_char: char) -> Result<Terminal, Error> {
+    fn read_id(&mut self, first_char: char) -> Result<Token, Error> {
         let mut id = vec![first_char as u8];
         loop {
             match self.read_char_if(|c| !Self::is_terminator(c)) {
@@ -224,7 +228,7 @@ impl Lexer {
         }
         let id = String::from_utf8(id).unwrap();
         if Self::is_valid_id(&id) {
-            return Ok(Terminal::id(self.start_pos, &id));
+            return Ok(Token::id(self.start_pos, &id));
         }
         Err(Error::InvalidId(id))
     }
@@ -238,7 +242,7 @@ impl Lexer {
     }
 
     fn peek_char(&self) -> Option<char> {
-        self.chars.get(self.current_pos).copied()
+        self.chars.get(self.current_pos).copied().map(|c| c as char)
     }
 
     fn read_char(&mut self) -> Option<char> {
@@ -253,13 +257,37 @@ impl Lexer {
         let ch = self.peek_char();
         if ch.is_some() && predicate(ch.unwrap()) {
             self.current_pos += 1;
-            return ch;
+            return ch.map(|c| c as char);
         }
         None
     }
 
     fn move_start_pos(&mut self) {
         self.start_pos = self.current_pos;
+    }
+}
+
+impl std::fmt::Display for TokenClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenClass::TerminalsSection => write!(f, "%TERMINALS"),
+            TokenClass::RulesSection => write!(f, "%RULES"),
+            TokenClass::PrioritiesSection => write!(f, "%PRIORITIES"),
+            TokenClass::Identifier => write!(f, "identifier"),
+            TokenClass::Assignment => write!(f, "'='"),
+            TokenClass::Or => write!(f, "'|'"),
+            TokenClass::Semicolon => write!(f, "';'"),
+            TokenClass::LeftParen => write!(f, "'('"),
+            TokenClass::RightParen => write!(f, "')'"),
+            TokenClass::Number => write!(f, "number"),
+            TokenClass::End => write!(f, "EOF"),
+        }
+    }
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.class)
     }
 }
 
@@ -302,21 +330,21 @@ impl std::error::Error for Error {}
 mod test {
     use std::path::PathBuf;
 
-    use crate::yalr_file::lexer::{Lexer, TerminalClass};
+    use crate::yalr_file::lexer::{Lexer, TokenClass};
 
     #[test]
-    fn test() {
+    fn main() {
         let mut simple_calculator_yalr = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         simple_calculator_yalr.push("test/fixtures/simple_calculator.yalr");
         let mut lexer = Lexer::new(&simple_calculator_yalr).unwrap();
-        let mut terminals = vec![];
+        let mut tokens = vec![];
         loop {
-            let terminal = lexer.next().unwrap();
-            if terminal.class() == TerminalClass::End {
+            let token = lexer.next().unwrap();
+            if token.class() == TokenClass::End {
                 break;
             }
-            terminals.push(terminal)
+            tokens.push(token)
         }
-        assert_eq!(terminals.len(), 34)
+        assert_eq!(tokens.len(), 34)
     }
 }
