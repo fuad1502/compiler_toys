@@ -1,13 +1,31 @@
-use core::convert::From;
-use std::path::PathBuf;
+use std::{env, path::PathBuf, process::ExitCode};
 
-use parser_generator::{code_gen::CodeGen, yalr_file::YalrFile};
+static BINARY_NAME: &str = "parser_generator";
 
-fn main() {
-    let mut simple_calculator_yalr = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    simple_calculator_yalr.push("test/fixtures/simple_calculator.yalr");
-    let yalr_file = YalrFile::new(&simple_calculator_yalr).unwrap();
-    let code_gen = CodeGen::new(yalr_file);
-    let output_file = PathBuf::from("example.rs");
-    code_gen.generate(&output_file).unwrap();
+fn main() -> ExitCode {
+    let (input_file_path, output_file_path) = match parse_arguments() {
+        Ok(res) => res,
+        Err(code) => return code,
+    };
+    match parser_generator::driver::run(&input_file_path, &output_file_path) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(message) => {
+            eprintln!("{message}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn parse_arguments() -> Result<(PathBuf, PathBuf), ExitCode> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 3 {
+        eprintln!("incorrect number of argument(s) given");
+        println!("{}", usage());
+        return Err(ExitCode::FAILURE);
+    }
+    Ok((PathBuf::from(&args[1]), PathBuf::from(&args[2])))
+}
+
+fn usage() -> String {
+    format!("usage: {BINARY_NAME} <yalr file> <output file>")
 }

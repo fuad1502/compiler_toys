@@ -20,6 +20,7 @@ impl YalrFile {
         parser.parse()
     }
 
+    #[allow(dead_code)]
     pub fn simple_calculator() -> Self {
         let s_acc = NonTerminal { id: 0 };
         let e = NonTerminal { id: 2 };
@@ -90,6 +91,7 @@ impl YalrFile {
         }
     }
 
+    #[allow(dead_code)]
     pub fn example() -> Self {
         let s_acc = NonTerminal { id: 0 };
         let s = NonTerminal { id: 1 };
