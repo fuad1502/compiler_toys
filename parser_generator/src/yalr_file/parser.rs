@@ -1,6 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule, yalr_file::lexer};
+use crate::{
+    NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule,
+    yalr_file::{error::SpannedError, lexer},
+};
 
 use super::{YalrFile, lexer::Lexer};
 
@@ -25,7 +28,7 @@ impl Parser {
 
     pub fn parse(mut self) -> Result<YalrFile, String> {
         if let Err(err) = self.root() {
-            return Err(format!("{err}"));
+            return Err(err.report(&self.lexer));
         }
         let rule_acc = Rule {
             head: self.non_terminals[0].0,
@@ -40,7 +43,7 @@ impl Parser {
         })
     }
 
-    fn root(&mut self) -> Result<(), Error> {
+    fn root(&mut self) -> Result<(), SpannedError<Error>> {
         self.terminals_section()?;
         self.rules_section()?;
         self.priorities_section()?;
@@ -48,22 +51,22 @@ impl Parser {
         Ok(())
     }
 
-    fn terminals_section(&mut self) -> Result<(), Error> {
+    fn terminals_section(&mut self) -> Result<(), SpannedError<Error>> {
         let _ = self.expect(lexer::TokenClass::TerminalsSection)?;
         self.parse_tokens()
     }
 
-    fn rules_section(&mut self) -> Result<(), Error> {
+    fn rules_section(&mut self) -> Result<(), SpannedError<Error>> {
         let _ = self.expect(lexer::TokenClass::RulesSection)?;
         self.parse_rules()
     }
 
-    fn priorities_section(&mut self) -> Result<(), Error> {
+    fn priorities_section(&mut self) -> Result<(), SpannedError<Error>> {
         let _ = self.expect(lexer::TokenClass::PrioritiesSection)?;
         self.parse_priorities()
     }
 
-    fn parse_tokens(&mut self) -> Result<(), Error> {
+    fn parse_tokens(&mut self) -> Result<(), SpannedError<Error>> {
         let token = self.expect(lexer::TokenClass::Identifier)?;
         self.insert_terminal(token);
 
@@ -79,21 +82,21 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_rules(&mut self) -> Result<(), Error> {
+    fn parse_rules(&mut self) -> Result<(), SpannedError<Error>> {
         while self.lexer.peek()?.class() == lexer::TokenClass::Identifier {
             self.parse_rule()?;
         }
         Ok(())
     }
 
-    fn parse_priorities(&mut self) -> Result<(), Error> {
+    fn parse_priorities(&mut self) -> Result<(), SpannedError<Error>> {
         while self.lexer.peek()?.class() == lexer::TokenClass::Identifier {
             self.parse_priority()?;
         }
         Ok(())
     }
 
-    fn parse_rule(&mut self) -> Result<(), Error> {
+    fn parse_rule(&mut self) -> Result<(), SpannedError<Error>> {
         let head = self.expect(lexer::TokenClass::Identifier)?;
         let _ = self.expect(lexer::TokenClass::Assignment)?;
 
@@ -121,7 +124,7 @@ impl Parser {
         Ok(())
     }
 
-    fn parse_priority(&mut self) -> Result<(), Error> {
+    fn parse_priority(&mut self) -> Result<(), SpannedError<Error>> {
         let identifier = self.expect(lexer::TokenClass::Identifier)?;
         let lexeme = self.lexer.get_lexeme(&identifier).to_string();
         if let Some(terminal) = self.get_terminal(&lexeme) {
@@ -133,10 +136,14 @@ impl Parser {
                 let rule = self.get_rule(non_terminal, 0).unwrap();
                 self.insert_rule_priority(rule);
             } else {
-                return Err(Error::RuleOrderNotProvidedInPriorities(lexeme));
+                let error = Error::RuleOrderNotProvidedInPriorities(lexeme);
+                let span = identifier.span().clone();
+                return Err(SpannedError::new(error, span));
             }
         } else {
-            return Err(Error::UnknownIdInPriorities(lexeme.to_string()));
+            let error = Error::UnknownIdInPriorities(lexeme);
+            let span = identifier.span().clone();
+            return Err(SpannedError::new(error, span));
         }
         Ok(())
     }
@@ -145,17 +152,21 @@ impl Parser {
         &mut self,
         non_terminal: NonTerminal,
         lexeme: String,
-    ) -> Result<(), Error> {
+    ) -> Result<(), SpannedError<Error>> {
         let _ = self.expect(lexer::TokenClass::LeftParen)?;
-        let order = self.expect(lexer::TokenClass::Number)?;
-        let order = str::parse::<usize>(self.lexer.get_lexeme(&order)).unwrap();
+        let order_token = self.expect(lexer::TokenClass::Number)?;
+        let order = str::parse::<usize>(self.lexer.get_lexeme(&order_token)).unwrap();
         if order == 0 {
-            return Err(Error::Generic(""));
+            let error = Error::Generic("Order should be greater than 0");
+            let span = order_token.span().clone();
+            return Err(SpannedError::new(error, span));
         }
         if let Some(rule) = self.get_rule(non_terminal, order - 1) {
             self.insert_rule_priority(rule);
         } else {
-            return Err(Error::InvalidRuleInPriorities(lexeme, order));
+            let error = Error::InvalidRuleInPriorities(lexeme, order);
+            let span = order_token.span().clone();
+            return Err(SpannedError::new(error, span));
         }
         let _ = self.expect(lexer::TokenClass::RightParen)?;
         Ok(())
@@ -229,10 +240,12 @@ impl Parser {
             .insert(terminal_or_rule, Priority::new(priority));
     }
 
-    fn expect(&mut self, expected: lexer::TokenClass) -> Result<lexer::Token, Error> {
+    fn expect(&mut self, expected: lexer::TokenClass) -> Result<lexer::Token, SpannedError<Error>> {
         let token = self.lexer.next()?;
         if token.class() != expected {
-            return Err(Error::Syntax(token, expected));
+            let span = token.span().clone();
+            let error = Error::Syntax(token, expected);
+            return Err(SpannedError::new(error, span));
         }
         Ok(token)
     }
@@ -257,12 +270,6 @@ pub enum Error {
     InvalidRuleInPriorities(String, usize),
     RuleOrderNotProvidedInPriorities(String),
     Generic(&'static str),
-}
-
-impl From<lexer::Error> for Error {
-    fn from(value: lexer::Error) -> Self {
-        Self::Lexer(value)
-    }
 }
 
 impl std::fmt::Display for Error {
@@ -292,6 +299,14 @@ impl std::fmt::Display for Error {
         }
     }
 }
+
+impl std::fmt::Debug for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl std::error::Error for Error {}
 
 #[cfg(test)]
 mod test {

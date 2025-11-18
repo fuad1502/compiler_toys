@@ -1,15 +1,46 @@
 use std::{fs::File, io::Read, path::Path};
 
+use crate::yalr_file::error::SpannedError;
+
 #[derive(Clone)]
 pub struct Token {
+    span: Span,
+    class: TokenClass,
+}
+
+#[derive(Clone)]
+pub struct Span {
     start_pos: usize,
     end_pos: usize,
-    class: TokenClass,
 }
 
 impl Token {
     pub fn class(&self) -> TokenClass {
         self.class
+    }
+
+    pub fn span(&self) -> &Span {
+        &self.span
+    }
+}
+
+impl Span {
+    fn new(start_pos: usize, end_pos: usize) -> Self {
+        Self { start_pos, end_pos }
+    }
+
+    fn character(start_pos: usize) -> Self {
+        Self {
+            start_pos,
+            end_pos: start_pos + 1,
+        }
+    }
+
+    fn string(start_pos: usize, s: &str) -> Self {
+        Self {
+            start_pos,
+            end_pos: start_pos + s.len(),
+        }
     }
 }
 
@@ -31,88 +62,77 @@ pub enum TokenClass {
 impl Token {
     fn left_paren(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + 1,
+            span: Span::character(start_pos),
             class: TokenClass::LeftParen,
         }
     }
 
     fn right_paren(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + 1,
+            span: Span::character(start_pos),
             class: TokenClass::RightParen,
         }
     }
 
     fn assignment(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + 1,
+            span: Span::character(start_pos),
             class: TokenClass::Assignment,
         }
     }
 
     fn or(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + 1,
+            span: Span::character(start_pos),
             class: TokenClass::Or,
         }
     }
 
     fn semicolon(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + 1,
+            span: Span::character(start_pos),
             class: TokenClass::Semicolon,
         }
     }
 
     fn number(start_pos: usize, end_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos,
+            span: Span::new(start_pos, end_pos),
             class: TokenClass::Number,
         }
     }
 
     fn terminals_section(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + "%TERMINALS".len(),
+            span: Span::string(start_pos, &TokenClass::TerminalsSection.to_string()),
             class: TokenClass::TerminalsSection,
         }
     }
 
     fn rules_section(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + "%RULES".len(),
+            span: Span::string(start_pos, &TokenClass::RulesSection.to_string()),
             class: TokenClass::RulesSection,
         }
     }
 
     fn priorities_section(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + "%PRIORITIES".len(),
+            span: Span::string(start_pos, &TokenClass::PrioritiesSection.to_string()),
             class: TokenClass::PrioritiesSection,
         }
     }
 
     fn id(start_pos: usize, id: &str) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos + id.len(),
+            span: Span::string(start_pos, id),
             class: TokenClass::Identifier,
         }
     }
 
     fn end(start_pos: usize) -> Self {
         Self {
-            start_pos,
-            end_pos: start_pos,
+            span: Span::new(start_pos, start_pos),
             class: TokenClass::End,
         }
     }
@@ -120,6 +140,7 @@ impl Token {
 
 pub struct Lexer {
     chars: Vec<u8>,
+    line_start_indices: Vec<usize>,
     start_pos: usize,
     current_pos: usize,
     current_token: Option<Token>,
@@ -130,23 +151,30 @@ impl Lexer {
         let mut file = File::open(yalr_file)?;
         let mut source = String::new();
         let _ = file.read_to_string(&mut source)?;
-        let chars = source.chars().map(|c| c as u8).collect();
+        let chars = source.chars().map(|c| c as u8).collect::<Vec<u8>>();
+        let mut line_start_indices = chars
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| if *c == b'\n' { Some(i + 1) } else { None })
+            .collect::<Vec<usize>>();
+        line_start_indices.insert(0, 0);
         Ok(Self {
             chars,
+            line_start_indices,
             start_pos: 0,
             current_pos: 0,
             current_token: None,
         })
     }
 
-    pub fn next(&mut self) -> Result<Token, Error> {
+    pub fn next(&mut self) -> Result<Token, SpannedError<Error>> {
         let token = self.peek()?.clone();
         self.move_start_pos();
         self.current_token = None;
         Ok(token)
     }
 
-    pub fn peek(&mut self) -> Result<&Token, Error> {
+    pub fn peek(&mut self) -> Result<&Token, SpannedError<Error>> {
         if self.current_token.is_none() {
             self.current_token = Some(self.get()?);
         }
@@ -154,10 +182,29 @@ impl Lexer {
     }
 
     pub fn get_lexeme(&self, token: &Token) -> &str {
-        str::from_utf8(&self.chars[token.start_pos..token.end_pos]).unwrap()
+        str::from_utf8(&self.chars[token.span.start_pos..token.span.end_pos]).unwrap()
     }
 
-    fn get(&mut self) -> Result<Token, Error> {
+    pub fn show_span(&self, span: &Span) -> String {
+        let line_number = self
+            .line_start_indices
+            .partition_point(|&i| i <= span.start_pos);
+        let line_start_idx = self.line_start_indices[line_number - 1];
+        let line_end_idx = self.line_start_indices[line_number] - 1;
+        let line = &self.chars[line_start_idx..line_end_idx];
+        let line = str::from_utf8(line).unwrap();
+        let span_offset = span.start_pos - line_start_idx;
+        let span_length = span.end_pos - span.start_pos;
+        let span_marker = format!(
+            "{}{}{}",
+            " ".repeat(span_offset),
+            "^",
+            "-".repeat(span_length - 1)
+        );
+        format!("Line {line_number:3}|{line}\n         {span_marker}")
+    }
+
+    fn get(&mut self) -> Result<Token, SpannedError<Error>> {
         loop {
             match self.read_char() {
                 Some(c) if c.is_whitespace() => {
@@ -182,29 +229,29 @@ impl Lexer {
                 Some('%') => return self.read_section_id(),
                 Some(c) if c.is_ascii_digit() => return self.read_number(),
                 Some(c) if c.is_ascii_alphabetic() => return self.read_id(c),
-                Some(c) => return Err(Error::UnexpectedChar(c, "")),
+                Some(_) => return Err(self.unexpected_char("")),
                 None => return Ok(Token::end(self.start_pos)),
             };
         }
     }
 
-    fn read_number(&mut self) -> Result<Token, Error> {
+    fn read_number(&mut self) -> Result<Token, SpannedError<Error>> {
         loop {
             match self.read_char_if(|c| !Self::is_terminator(c)) {
                 Some(c) if c.is_ascii_digit() => continue,
-                Some(c) => return Err(Error::UnexpectedChar(c, "digit")),
+                Some(_) => return Err(self.unexpected_char("digit")),
                 None => break,
             }
         }
         Ok(Token::number(self.start_pos, self.current_pos))
     }
 
-    fn read_section_id(&mut self) -> Result<Token, Error> {
+    fn read_section_id(&mut self) -> Result<Token, SpannedError<Error>> {
         let mut id = vec![];
         loop {
             match self.read_char_if(|c| !Self::is_terminator(c)) {
                 Some(c) if c.is_ascii_uppercase() => id.push(c as u8),
-                Some(c) => return Err(Error::UnexpectedChar(c, "uppercase character")),
+                Some(_) => return Err(self.unexpected_char("uppercase character")),
                 None => break,
             }
         }
@@ -213,16 +260,19 @@ impl Lexer {
             "TERMINALS" => Ok(Token::terminals_section(self.start_pos)),
             "RULES" => Ok(Token::rules_section(self.start_pos)),
             "PRIORITIES" => Ok(Token::priorities_section(self.start_pos)),
-            _ => Err(Error::UnrecognizedSectionId(id)),
+            _ => Err(SpannedError::new(
+                Error::UnrecognizedSectionId(id),
+                self.current_span(),
+            )),
         }
     }
 
-    fn read_id(&mut self, first_char: char) -> Result<Token, Error> {
+    fn read_id(&mut self, first_char: char) -> Result<Token, SpannedError<Error>> {
         let mut id = vec![first_char as u8];
         loop {
             match self.read_char_if(|c| !Self::is_terminator(c)) {
                 Some(c) if c.is_ascii_alphanumeric() => id.push(c as u8),
-                Some(c) => return Err(Error::UnexpectedChar(c, "alphanumeric character")),
+                Some(_) => return Err(self.unexpected_char("alphanumeric character")),
                 None => break,
             }
         }
@@ -230,7 +280,14 @@ impl Lexer {
         if Self::is_valid_id(&id) {
             return Ok(Token::id(self.start_pos, &id));
         }
-        Err(Error::InvalidId(id))
+        Err(SpannedError::new(Error::InvalidId(id), self.current_span()))
+    }
+
+    fn unexpected_char(&self, expected: &'static str) -> SpannedError<Error> {
+        let span = Span::character(self.current_pos - 1);
+        let actual = self.chars[self.current_pos - 1] as char;
+        let error = Error::UnexpectedChar(actual, expected);
+        SpannedError::new(error, span)
     }
 
     fn is_valid_id(id: &str) -> bool {
@@ -264,6 +321,10 @@ impl Lexer {
 
     fn move_start_pos(&mut self) {
         self.start_pos = self.current_pos;
+    }
+
+    fn current_span(&self) -> Span {
+        Span::new(self.start_pos, self.current_pos)
     }
 }
 
@@ -339,7 +400,13 @@ mod test {
         let mut lexer = Lexer::new(&simple_calculator_yalr).unwrap();
         let mut tokens = vec![];
         loop {
-            let token = lexer.next().unwrap();
+            let token = match lexer.next() {
+                Ok(t) => t,
+                Err(e) => {
+                    e.report(&lexer);
+                    panic!()
+                }
+            };
             if token.class() == TokenClass::End {
                 break;
             }
