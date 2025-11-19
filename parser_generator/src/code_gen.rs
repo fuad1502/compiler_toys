@@ -2,7 +2,7 @@ use core::fmt::Formatter;
 use std::{
     fs::{File, OpenOptions},
     io::Write,
-    path::Path,
+    path::{Path, PathBuf},
     rc::Rc,
 };
 
@@ -30,30 +30,44 @@ impl CodeGen {
         }
     }
 
-    pub fn generate(&self, parser_file: &Path) -> Result<(), String> {
-        let mut parser_file = OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(parser_file)
+    pub fn generate(&self, output_directory: &Path) -> Result<(), String> {
+        let mut parser_file = Self::create_file_at("parser.rs", output_directory)?;
+        self.write_parser_file(&mut parser_file)
             .map_err(|e| e.to_string())?;
-        self.write_structs(&mut parser_file)
+        let mut symbol_file = Self::create_file_at("symbol.rs", output_directory)?;
+        self.write_symbol_file(&mut symbol_file)
             .map_err(|e| e.to_string())
     }
 
-    fn write_structs(&self, parser_file: &mut File) -> std::io::Result<()> {
+    fn create_file_at(name: &str, directory: &Path) -> Result<File, String> {
+        let file_path = PathBuf::from(directory).join(name);
+        OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(file_path)
+            .map_err(|e| e.to_string())
+    }
+
+    fn write_parser_file(&self, parser_file: &mut File) -> std::io::Result<()> {
+        Self::write_parser_uses(parser_file)?;
+        Self::write_state_and_action_struct(parser_file)?;
         self.write_parser_struct(parser_file)?;
-        self.write_parser_impl(parser_file)?;
-        self.write_other_structs(parser_file)?;
-        self.write_non_terminal_class_enum(parser_file)?;
-        self.write_terminal_class_enum(parser_file)
+        self.write_parser_impl(parser_file)
+    }
+
+    fn write_symbol_file(&self, symbol_file: &mut File) -> std::io::Result<()> {
+        Self::write_base_structs(symbol_file)?;
+        self.write_non_terminal_class_enum(symbol_file)?;
+        self.write_terminal_class_enum(symbol_file)
     }
 
     fn write_parser_impl(&self, parser_file: &mut File) -> std::io::Result<()> {
         writeln!(parser_file, "impl Parser {{")?;
         self.write_parser_impl_new(parser_file)?;
         self.write_parser_impl_others(parser_file)?;
-        writeln!(parser_file, "}}")
+        writeln!(parser_file, "}}")?;
+        Self::write_parser_default_impl(parser_file)
     }
 
     fn write_parser_impl_new(&self, parser_file: &mut File) -> std::io::Result<()> {
@@ -68,6 +82,38 @@ impl CodeGen {
         self.write_parser_impl_new_epilogue(parser_file)
     }
 
+    fn write_parser_uses(parser_file: &mut File) -> Result<(), std::io::Error> {
+        write!(
+            parser_file,
+            r#"use super::{{
+    lexer::Lexer,
+    symbol::{{NonTerminal, NonTerminalClass, Rule, Symbol, Terminal, TerminalClass}},
+}};
+"#
+        )
+    }
+
+    fn write_state_and_action_struct(parser_file: &mut File) -> Result<(), std::io::Error> {
+        write!(
+            parser_file,
+            r#"
+struct State {{
+    symbol: Option<Symbol>,
+    number: usize,
+}}
+
+#[derive(Clone, Copy)]
+enum Action {{
+    Shift(usize),
+    Reduce(usize),
+    Accept,
+    Error,
+}}
+
+"#
+        )
+    }
+
     fn write_parser_struct(&self, parser_file: &mut File) -> std::io::Result<()> {
         let number_of_terminals = self.terminals.len();
         let number_of_non_terminals = self.non_terminals.len();
@@ -75,7 +121,7 @@ impl CodeGen {
         let number_of_rules = self.rules.len();
         write!(
             parser_file,
-            r#"struct Parser {{
+            r#"pub struct Parser {{
     state_stack: Vec<State>,
     actions: [[Action; {number_of_terminals}]; {number_of_states}],
     next_states: [[Option<usize>; {number_of_non_terminals}]; {number_of_states}],
@@ -90,7 +136,7 @@ impl CodeGen {
     fn write_parser_impl_new_prologue(&self, parser_file: &mut File) -> std::io::Result<()> {
         write!(
             parser_file,
-            r#"    fn new() -> Self {{
+            r#"    pub fn new() -> Self {{
         let initial_state = State {{
             symbol: None,
             number: 0,
@@ -196,43 +242,17 @@ impl CodeGen {
         writeln!(parser_file, "];")
     }
 
-    fn write_non_terminal_class_enum(&self, parser_file: &mut File) -> Result<(), std::io::Error> {
-        writeln!(
-            parser_file,
-            "#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]\n enum NonTerminalClass {{"
-        )?;
-        for (_, name) in &self.non_terminals {
-            let tabs = Tabs::new(1);
-            writeln!(parser_file, "{tabs}{name},")?;
-        }
-        writeln!(parser_file, "}}")?;
-        writeln!(parser_file)
-    }
-
-    fn write_terminal_class_enum(&self, parser_file: &mut File) -> Result<(), std::io::Error> {
-        writeln!(
-            parser_file,
-            "#[derive(Clone, Copy, PartialEq, Eq, Hash)]\n enum TerminalClass {{"
-        )?;
-        for (_, name) in &self.terminals {
-            let tabs = Tabs::new(1);
-            writeln!(parser_file, "{tabs}{name},")?;
-        }
-        writeln!(parser_file, "}}")?;
-        writeln!(parser_file)
-    }
-
     fn write_parser_impl_others(&self, parser_file: &mut File) -> Result<(), std::io::Error> {
         let number_of_rules = self.rules.len();
         write!(
             parser_file,
             r#"
-    fn parse(&mut self, mut lexer: Lexer) -> Result<Symbol, &'static str> {{
+    pub fn parse(&mut self, mut lexer: Lexer) -> Result<Symbol, &'static str> {{
         loop {{
-            let terminal = lexer.peek()?;
-            match self.get_action(terminal.class) {{
+            let terminal = lexer.peek_token()?;
+            match self.get_action(terminal.class()) {{
                 Action::Shift(state_number) => {{
-                    self.shift(lexer.next().unwrap(), state_number)
+                    self.shift(lexer.next_token().unwrap(), state_number)
                 }}
                 Action::Reduce(rule_number) => match rule_number {{
                     rule_number if rule_number <= {number_of_rules} => self.reduce_rule(rule_number),
@@ -246,14 +266,11 @@ impl CodeGen {
 
     fn reduce_rule(&mut self, rule_number: usize) {{
         let non_terminal_class = self.rule_heads[rule_number];
-        let rule = Rule {{
-            number: rule_number,
-            components: self.get_top_symbols(self.rule_component_counts[rule_number]),
-        }};
-        let non_terminal = NonTerminal {{
-            rule,
-            class: non_terminal_class,
-        }};
+        let rule = Rule::new(
+            rule_number,
+            self.get_top_symbols(self.rule_component_counts[rule_number]),
+        );
+        let non_terminal = NonTerminal::new(rule, non_terminal_class);
         let new_state = State {{
             symbol: Some(Symbol::NonTerminal(non_terminal)),
             number: self.next(non_terminal_class),
@@ -296,45 +313,108 @@ impl CodeGen {
         )
     }
 
-    fn write_other_structs(&self, parser_file: &mut File) -> Result<(), std::io::Error> {
+    fn write_parser_default_impl(parser_file: &mut File) -> Result<(), std::io::Error> {
         write!(
             parser_file,
             r#"
-struct State {{
-    symbol: Option<Symbol>,
-    number: usize,
-}}
+impl Default for Parser {{
+    fn default() -> Self {{
+        Self::new()
+    }}
+}}"#
+        )
+    }
 
-#[derive(Clone, Copy)]
-enum Action {{
-    Shift(usize),
-    Reduce(usize),
-    Accept,
-    Error,
-}}
-
-enum Symbol {{
+    fn write_base_structs(symbol_file: &mut File) -> Result<(), std::io::Error> {
+        write!(
+            symbol_file,
+            r#"pub enum Symbol {{
     NonTerminal(NonTerminal),
     Terminal(Terminal),
 }}
 
-struct NonTerminal {{
+pub struct NonTerminal {{
     rule: Rule,
     class: NonTerminalClass,
 }}
 
-struct Terminal {{
+pub struct Terminal {{
     lexeme: String,
     class: TerminalClass,
 }}
 
-struct Rule {{
+pub struct Rule {{
     components: Vec<Symbol>,
     number: usize,
 }}
 
+impl Symbol {{
+    pub fn pretty_print(&self, indent: usize) {{
+        let indent_str = "    ".repeat(indent);
+        match self {{
+            Symbol::NonTerminal(non_terminal) => {{
+                println!(
+                    "{{indent_str}}{{:?}}({{}}):",
+                    non_terminal.class, non_terminal.rule.number
+                );
+                for symbol in non_terminal.rule.components.iter() {{
+                    symbol.pretty_print(indent + 1)
+                }}
+            }}
+            Symbol::Terminal(terminal) => println!("{{indent_str}}{{}}", terminal.lexeme),
+        }}
+    }}
+}}
+
+impl Terminal {{
+    pub fn new(lexeme: String, class: TerminalClass) -> Self {{
+        Self {{ lexeme, class }}
+    }}
+
+    pub fn class(&self) -> TerminalClass {{
+        self.class
+    }}
+}}
+
+impl NonTerminal {{
+    pub fn new(rule: Rule, class: NonTerminalClass) -> Self {{
+        Self {{ rule, class }}
+    }}
+}}
+
+impl Rule {{
+    pub fn new(number: usize, components: Vec<Symbol>) -> Self {{
+        Self {{ number, components }}
+    }}
+}}
+
 "#
         )
+    }
+
+    fn write_non_terminal_class_enum(&self, symbol_file: &mut File) -> Result<(), std::io::Error> {
+        writeln!(
+            symbol_file,
+            "#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]\n pub enum NonTerminalClass {{"
+        )?;
+        for (_, name) in &self.non_terminals {
+            let tabs = Tabs::new(1);
+            writeln!(symbol_file, "{tabs}{name},")?;
+        }
+        writeln!(symbol_file, "}}")?;
+        writeln!(symbol_file)
+    }
+
+    fn write_terminal_class_enum(&self, symbol_file: &mut File) -> Result<(), std::io::Error> {
+        writeln!(
+            symbol_file,
+            "#[derive(Clone, Copy, PartialEq, Eq, Hash)]\n pub enum TerminalClass {{"
+        )?;
+        for (_, name) in &self.terminals {
+            let tabs = Tabs::new(1);
+            writeln!(symbol_file, "{tabs}{name},")?;
+        }
+        writeln!(symbol_file, "}}")
     }
 
     fn action_string(&self, action: &Action) -> String {

@@ -9,6 +9,9 @@ version = "0.1.0"
 [[package]]
 name = "parser"
 version = "0.1.0"
+dependencies = [
+ "parser_generator",
+]
 
 [[package]]
 name = "parser_generator"
