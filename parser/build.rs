@@ -5,6 +5,9 @@ fn main() {
         .join("yalr")
         .join("simple_calculator.yalr");
     let output_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
-    parser_generator::driver::run(&yalr_file_path, &output_directory).unwrap();
+    if let Err(e) = parser_generator::driver::run(&yalr_file_path, &output_directory) {
+        eprintln!("{}", e);
+        panic!("Failed to compile yalr file!");
+    }
     println!("cargo:rerun-if-changed=yalr/simple_calculator.rs");
 }
