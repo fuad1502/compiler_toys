@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["lexer_generator","parser","parser_generator"]
+members = ["lexer_generator","parser_generator","simple_calculator"]

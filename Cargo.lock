@@ -7,12 +7,12 @@ name = "lexer_generator"
 version = "0.1.0"
 
 [[package]]
-name = "parser"
+name = "parser_generator"
+version = "0.1.0"
+
+[[package]]
+name = "simple_calculator"
 version = "0.1.0"
 dependencies = [
  "parser_generator",
 ]
-
-[[package]]
-name = "parser_generator"
-version = "0.1.0"

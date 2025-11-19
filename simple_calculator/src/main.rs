@@ -1,4 +1,4 @@
-use parser::{lexer::Lexer, parser::Parser};
+use simple_calculator::{lexer::Lexer, parser::Parser};
 
 fn main() {
     let lexer = Lexer::new("1+(2+3*4+5)+6");
