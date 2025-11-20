@@ -247,7 +247,7 @@ enum Action {{
         write!(
             parser_file,
             r#"
-    pub fn parse(&mut self, mut lexer: Lexer) -> Result<Symbol, &'static str> {{
+    pub fn parse(&mut self, lexer: &mut Lexer) -> Result<Symbol, String> {{
         loop {{
             let terminal = lexer.peek_token()?;
             match self.get_action(terminal.class()) {{
@@ -259,7 +259,7 @@ enum Action {{
                     _ => unreachable!(),
                 }},
                 Action::Accept => return Ok(self.get_top_symbol()),
-                Action::Error => return Err("Syntax error"),
+                Action::Error => return Err("Syntax error".to_string()),
             }}
         }}
     }}
@@ -328,7 +328,9 @@ impl Default for Parser {{
     fn write_base_structs(symbol_file: &mut File) -> Result<(), std::io::Error> {
         write!(
             symbol_file,
-            r#"pub enum Symbol {{
+            r#"use super::lexer::Lexer;
+
+pub enum Symbol {{
     NonTerminal(NonTerminal),
     Terminal(Terminal),
 }}
@@ -338,9 +340,16 @@ pub struct NonTerminal {{
     class: NonTerminalClass,
 }}
 
+#[derive(Clone)]
 pub struct Terminal {{
-    lexeme: String,
     class: TerminalClass,
+    span: Span,
+}}
+
+#[derive(Clone)]
+pub struct Span {{
+    start_pos: usize,
+    end_pos: usize,
 }}
 
 pub struct Rule {{
@@ -349,7 +358,7 @@ pub struct Rule {{
 }}
 
 impl Symbol {{
-    pub fn pretty_print(&self, indent: usize) {{
+    pub fn pretty_print(&self, lexer: &Lexer, indent: usize) {{
         let indent_str = "    ".repeat(indent);
         match self {{
             Symbol::NonTerminal(non_terminal) => {{
@@ -358,21 +367,25 @@ impl Symbol {{
                     non_terminal.class, non_terminal.rule.number
                 );
                 for symbol in non_terminal.rule.components.iter() {{
-                    symbol.pretty_print(indent + 1)
+                    symbol.pretty_print(lexer, indent + 1)
                 }}
             }}
-            Symbol::Terminal(terminal) => println!("{{indent_str}}{{}}", terminal.lexeme),
+            Symbol::Terminal(terminal) => println!("{{indent_str}}{{}}", lexer.get_lexeme(terminal)),
         }}
     }}
 }}
 
 impl Terminal {{
-    pub fn new(lexeme: String, class: TerminalClass) -> Self {{
-        Self {{ lexeme, class }}
+    pub fn new(class: TerminalClass, span: Span) -> Self {{
+        Self {{ class, span }}
     }}
 
     pub fn class(&self) -> TerminalClass {{
         self.class
+    }}
+
+    pub fn span(&self) -> &Span {{
+        &self.span
     }}
 }}
 
@@ -385,6 +398,20 @@ impl NonTerminal {{
 impl Rule {{
     pub fn new(number: usize, components: Vec<Symbol>) -> Self {{
         Self {{ number, components }}
+    }}
+}}
+
+impl Span {{
+    pub fn new(start_pos: usize, end_pos: usize) -> Self {{
+        Self {{ start_pos, end_pos }}
+    }}
+
+    pub fn start_pos(&self) -> usize {{
+        self.start_pos
+    }}
+
+    pub fn end_pos(&self) -> usize {{
+        self.end_pos
     }}
 }}
 
@@ -408,7 +435,7 @@ impl Rule {{
     fn write_terminal_class_enum(&self, symbol_file: &mut File) -> Result<(), std::io::Error> {
         writeln!(
             symbol_file,
-            "#[derive(Clone, Copy, PartialEq, Eq, Hash)]\n pub enum TerminalClass {{"
+            "#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]\n pub enum TerminalClass {{"
         )?;
         for (_, name) in &self.terminals {
             let tabs = Tabs::new(1);
