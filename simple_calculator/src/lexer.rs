@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs::File, io::Read, path::Path};
 
 use crate::symbol::{Span, Terminal, TerminalClass};
 
-static N: usize = 10;
+static NUM_OF_STATES: usize = 10;
 
 #[derive(Copy, Clone)]
 struct State {
@@ -14,7 +14,7 @@ pub struct Lexer {
     start_pos: usize,
     current_pos: usize,
     current_token: Option<Terminal>,
-    states: [State; N],
+    states: [State; NUM_OF_STATES],
     transition_table: Vec<HashMap<char, usize>>,
     states_stack: Vec<Vec<usize>>,
 }
