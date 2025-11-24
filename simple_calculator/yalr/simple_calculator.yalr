@@ -1,5 +1,9 @@
 %TERMINALS
-Number Plus Star LeftParen RightParen
+Number("\d\d*")
+Plus("+")
+Star("\*")
+LeftParen("\(")
+RightParen("\)")
 %RULES
 E = E Plus E
 | E Star E

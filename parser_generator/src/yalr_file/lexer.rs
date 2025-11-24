@@ -56,6 +56,7 @@ pub enum TokenClass {
     LeftParen,
     RightParen,
     Number,
+    String,
     End,
 }
 
@@ -92,6 +93,13 @@ impl Token {
         Self {
             span: Span::character(start_pos),
             class: TokenClass::Semicolon,
+        }
+    }
+
+    fn string(start_pos: usize, string: &str) -> Self {
+        Self {
+            span: Span::new(start_pos, start_pos + string.len() + 2),
+            class: TokenClass::String,
         }
     }
 
@@ -226,6 +234,9 @@ impl Lexer {
                 Some(';') => {
                     return Ok(Token::semicolon(self.start_pos));
                 }
+                Some('\"') => {
+                    return self.read_string();
+                }
                 Some('%') => return self.read_section_id(),
                 Some(c) if c.is_ascii_digit() => return self.read_number(),
                 Some(c) if c.is_ascii_alphabetic() => return self.read_id(c),
@@ -244,6 +255,20 @@ impl Lexer {
             }
         }
         Ok(Token::number(self.start_pos, self.current_pos))
+    }
+
+    fn read_string(&mut self) -> Result<Token, SpannedError<Error>> {
+        let mut string = vec![];
+        loop {
+            match self.read_char() {
+                Some('"') => break,
+                Some('\n') => return Err(self.unterminated_string()),
+                Some(c) => string.push(c as u8),
+                None => break,
+            }
+        }
+        let string = String::from_utf8(string).unwrap();
+        Ok(Token::string(self.start_pos, &string))
     }
 
     fn read_section_id(&mut self) -> Result<Token, SpannedError<Error>> {
@@ -287,6 +312,12 @@ impl Lexer {
         let span = Span::character(self.current_pos - 1);
         let actual = self.chars[self.current_pos - 1] as char;
         let error = Error::UnexpectedChar(actual, expected);
+        SpannedError::new(error, span)
+    }
+
+    fn unterminated_string(&self) -> SpannedError<Error> {
+        let span = self.current_span();
+        let error = Error::UnterminatedString;
         SpannedError::new(error, span)
     }
 
@@ -341,6 +372,7 @@ impl std::fmt::Display for TokenClass {
             TokenClass::LeftParen => write!(f, "'('"),
             TokenClass::RightParen => write!(f, "')'"),
             TokenClass::Number => write!(f, "number"),
+            TokenClass::String => write!(f, "string"),
             TokenClass::End => write!(f, "EOF"),
         }
     }
@@ -357,6 +389,7 @@ pub enum Error {
     UnexpectedChar(char, &'static str),
     UnrecognizedSectionId(String),
     InvalidId(String),
+    UnterminatedString,
 }
 
 impl From<std::io::Error> for Error {
@@ -375,6 +408,7 @@ impl std::fmt::Display for Error {
             ),
             Error::UnrecognizedSectionId(id) => write!(f, "Unrecognized section id: {id}"),
             Error::InvalidId(id) => write!(f, "Invalid formatted id: {id}"),
+            Error::UnterminatedString => write!(f, "String not terminated"),
         }
     }
 }
@@ -412,6 +446,6 @@ mod test {
             }
             tokens.push(token)
         }
-        assert_eq!(tokens.len(), 34)
+        assert_eq!(tokens.len(), 49)
     }
 }

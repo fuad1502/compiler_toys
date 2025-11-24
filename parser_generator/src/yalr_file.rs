@@ -5,6 +5,8 @@ mod parser;
 use std::rc::Rc;
 use std::{collections::HashMap, path::Path};
 
+use lexer_generator::TokenSpec;
+
 use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule};
 
 pub struct YalrFile {
@@ -12,6 +14,7 @@ pub struct YalrFile {
     pub non_terminals: Vec<(NonTerminal, String)>,
     pub rules: Vec<Rc<Rule>>,
     pub priorities: HashMap<TerminalOrRule, Priority>,
+    pub token_specs: Vec<TokenSpec>,
 }
 
 impl YalrFile {
@@ -89,6 +92,7 @@ impl YalrFile {
             non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
             rules,
             priorities,
+            token_specs: vec![],
         }
     }
 
@@ -129,6 +133,7 @@ impl YalrFile {
             non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
             rules,
             priorities: HashMap::new(),
+            token_specs: vec![],
         }
     }
 }

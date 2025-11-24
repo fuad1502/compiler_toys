@@ -298,6 +298,20 @@ impl RegexNode {
     }
 }
 
+impl TokenSpec {
+    pub fn new(id: usize, pattern: String) -> Self {
+        Self { id, pattern }
+    }
+
+    pub fn id(&self) -> usize {
+        self.id
+    }
+
+    pub fn pattern(&self) -> &str {
+        &self.pattern
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;

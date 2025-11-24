@@ -1,5 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
+use lexer_generator::TokenSpec;
+
 use crate::{
     NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule,
     yalr_file::{error::SpannedError, lexer},
@@ -13,6 +15,7 @@ pub struct Parser {
     non_terminals: Vec<(NonTerminal, String)>,
     rules: Vec<Rc<Rule>>,
     priorities: HashMap<TerminalOrRule, Priority>,
+    token_specs: Vec<TokenSpec>,
 }
 
 impl Parser {
@@ -23,6 +26,7 @@ impl Parser {
             non_terminals: vec![(NonTerminal { id: 0 }, "SAcc".to_string())],
             rules: vec![],
             priorities: HashMap::new(),
+            token_specs: vec![],
         }
     }
 
@@ -40,6 +44,7 @@ impl Parser {
             non_terminals: self.non_terminals,
             rules: self.rules,
             priorities: self.priorities,
+            token_specs: self.token_specs,
         })
     }
 
@@ -67,18 +72,9 @@ impl Parser {
     }
 
     fn parse_tokens(&mut self) -> Result<(), SpannedError<Error>> {
-        let token = self.expect(lexer::TokenClass::Identifier)?;
-        self.insert_terminal(token);
-
-        loop {
-            let token = self.lexer.peek()?;
-            if token.class() != lexer::TokenClass::Identifier {
-                break;
-            }
-            let token = self.lexer.next()?;
-            self.insert_terminal(token);
+        while self.lexer.peek()?.class() == lexer::TokenClass::Identifier {
+            self.parse_token()?;
         }
-
         Ok(())
     }
 
@@ -120,6 +116,18 @@ impl Parser {
         let _ = self.expect(lexer::TokenClass::Semicolon)?;
 
         self.insert_rules(head, rules_tokens);
+
+        Ok(())
+    }
+
+    fn parse_token(&mut self) -> Result<(), SpannedError<Error>> {
+        let identifier = self.expect(lexer::TokenClass::Identifier)?;
+        _ = self.expect(lexer::TokenClass::LeftParen)?;
+        let pattern = self.expect(lexer::TokenClass::String)?;
+        _ = self.expect(lexer::TokenClass::RightParen)?;
+        let pattern = self.lexer.get_lexeme(&pattern);
+        let pattern = &pattern[1..pattern.len() - 1];
+        self.insert_terminal(identifier, pattern.to_string());
 
         Ok(())
     }
@@ -209,10 +217,12 @@ impl Parser {
         non_terminal
     }
 
-    fn insert_terminal(&mut self, token: lexer::Token) {
+    fn insert_terminal(&mut self, token: lexer::Token, pattern: String) {
         let terminal_name = self.lexer.get_lexeme(&token);
         let terminal = Terminal::Other(self.terminals.len() - 1);
         self.terminals.push((terminal, terminal_name.to_string()));
+        let token_spec = TokenSpec::new(self.token_specs.len(), pattern);
+        self.token_specs.push(token_spec);
     }
 
     fn get_non_terminal(&self, lexeme: &str) -> Option<NonTerminal> {
@@ -363,6 +373,10 @@ mod test {
                 .unwrap()
                 .assigned_priority,
             Some(usize::MAX - 2)
-        )
+        );
+
+        // Verify token specs field
+        assert_eq!(yalr_file.token_specs.len(), 5);
+        assert_eq!(yalr_file.token_specs[0].pattern(), "\\d\\d*");
     }
 }
