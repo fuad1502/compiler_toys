@@ -70,8 +70,7 @@ impl LexerGenerator {
     }
 
     fn create_dfa(pattern: &str) -> Vec<DfaState> {
-        let regex_root = regex_parser::parse_regex(pattern);
-        let alphabet = Self::alphabet(pattern);
+        let (regex_root, alphabet) = regex_parser::parse_regex(pattern).unwrap();
         let cache = Cache::new(&regex_root);
 
         let first_state = DfaState::new(cache.first_pos(&regex_root).clone());
@@ -103,12 +102,6 @@ impl LexerGenerator {
         }
         states
     }
-
-    fn alphabet(pattern: &str) -> Vec<char> {
-        vec![
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '+', '(', ')',
-        ]
-    }
 }
 
 impl DfaState {
@@ -120,7 +113,7 @@ impl DfaState {
     }
 
     fn is_accepting(&self) -> bool {
-        self.terminals.iter().find(|t| t.ch == '\0').is_some()
+        self.terminals.iter().any(|t| t.ch == '\0')
     }
 }
 
@@ -174,7 +167,7 @@ impl Cache {
                 let right_first_pos = self.first_pos(right);
                 let left_nullable = self.nullable(left);
                 let first_pos = if left_nullable {
-                    left_first_pos.union(&right_first_pos).cloned().collect()
+                    left_first_pos.union(right_first_pos).cloned().collect()
                 } else {
                     left_first_pos.clone()
                 };
@@ -185,7 +178,7 @@ impl Cache {
                 self.calculate_first_pos(right);
                 let left_first_pos = self.first_pos(left);
                 let right_first_pos = self.first_pos(right);
-                let first_pos = left_first_pos.union(&right_first_pos).cloned().collect();
+                let first_pos = left_first_pos.union(right_first_pos).cloned().collect();
                 _ = self.first_pos_table.insert(node.clone(), first_pos);
             }
             RegexNode::Parenthesized(child) | RegexNode::Kleene(child) => {
@@ -209,7 +202,7 @@ impl Cache {
                 let right_last_pos = self.last_pos(right);
                 let right_nullable = self.nullable(right);
                 let last_pos = if right_nullable {
-                    right_last_pos.union(&left_last_pos).cloned().collect()
+                    right_last_pos.union(left_last_pos).cloned().collect()
                 } else {
                     right_last_pos.clone()
                 };
