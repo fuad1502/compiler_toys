@@ -90,6 +90,7 @@ struct State {{
 
 pub struct Lexer {{
     chars: Vec<u8>,
+    line_start_indices: Vec<usize>,
     start_pos: usize,
     current_pos: usize,
     current_token: Option<Terminal>,
@@ -114,6 +115,12 @@ pub struct Lexer {{
             self.file,
             r#"    pub fn from_source_str(source: &str) -> Self {{
         let chars = source.chars().map(|c| c as u8).collect::<Vec<u8>>();
+        let mut line_start_indices = chars
+            .iter()
+            .enumerate()
+            .filter_map(|(i, c)| if *c == b'\n' {{ Some(i + 1) }} else {{ None }})
+            .collect::<Vec<usize>>();
+        line_start_indices.insert(0, 0);
 "#
         )
     }
@@ -179,6 +186,7 @@ pub struct Lexer {{
             r#"
         Self {{
             chars,
+            line_start_indices,
             start_pos: 0,
             current_pos: 0,
             current_token: None,
@@ -227,6 +235,28 @@ pub struct Lexer {{
         str::from_utf8(&self.chars[token.span().start_pos()..token.span().end_pos()]).unwrap()
     }}
 
+    pub fn show_span(&self, span: &Span) -> String {{
+        let line_number = self
+            .line_start_indices
+            .partition_point(|&i| i <= span.start_pos());
+        let line_start_idx = self.line_start_indices[line_number - 1];
+        let line_end_idx = match self.line_start_indices.get(line_number) {{
+            Some(idx) => idx - 1,
+            None => self.chars.len(),
+        }};
+        let line = &self.chars[line_start_idx..line_end_idx];
+        let line = str::from_utf8(line).unwrap();
+        let span_offset = span.start_pos() - line_start_idx;
+        let span_length = span.end_pos() - span.start_pos();
+        let span_marker = format!(
+            "{{}}{{}}{{}}",
+            " ".repeat(span_offset),
+            "^",
+            "-".repeat(span_length.saturating_sub(1))
+        );
+        format!("Line {{line_number:3}}|{{line}}\n         {{span_marker}}")
+    }}
+
     fn move_start_pos(&mut self) {{
         self.start_pos = self.current_pos;
     }}
@@ -273,17 +303,22 @@ pub struct Lexer {{
                 let class = prioritized_class;
                 return Ok(Terminal::new(class, span));
             }} else if self.states_stack.len() == 1 {{
-                return Err(format!(
-                    "Unexpected character found: {{}}",
-                    self.peek_char()
-                        .map(|c| c.to_string())
-                        .unwrap_or(String::from("EOF"))
-                ));
+                return Err(self.report_error());
             }} else {{
                 self.states_stack.pop();
                 self.revert_char();
             }}
         }}
+    }}
+
+    fn report_error(&self) -> String {{
+        let span_str = self.show_span(&self.current_span());
+        format!(
+            "{{span_str}}\nerror: unexpected character found: {{}}",
+            self.peek_char()
+                .map(|c| c.to_string())
+                .unwrap_or(String::from("EOF"))
+        )
     }}
 
     fn peek_char(&self) -> Option<char> {{
@@ -310,6 +345,7 @@ pub struct Lexer {{
                 break;
             }}
         }}
+        self.move_start_pos();
     }}
 
     fn current_span(&self) -> Span {{

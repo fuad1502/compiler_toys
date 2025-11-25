@@ -65,7 +65,8 @@ impl CodeGen {
     fn write_symbol_file(&self, symbol_file: &mut File) -> std::io::Result<()> {
         Self::write_base_structs(symbol_file)?;
         self.write_non_terminal_class_enum(symbol_file)?;
-        self.write_terminal_class_enum(symbol_file)
+        self.write_terminal_class_enum(symbol_file)?;
+        self.write_terminal_class_from_impl(symbol_file)
     }
 
     fn write_parser_impl(&self, parser_file: &mut File) -> std::io::Result<()> {
@@ -265,9 +266,30 @@ enum Action {{
                     _ => unreachable!(),
                 }},
                 Action::Accept => return Ok(self.get_top_symbol()),
-                Action::Error => return Err("Syntax error".to_string()),
+                Action::Error => return Err(self.report_error(lexer)),
             }}
         }}
+    }}
+
+    fn report_error(&self, lexer: &mut Lexer) -> String {{
+        let terminal = lexer.peek_token().unwrap();
+        let span = terminal.span().clone();
+        let found = terminal.class();
+        let expected = self.expected_classes();
+        let span_str = lexer.show_span(&span);
+        format!("{{span_str}}\nerror: found {{found:?}}, expected: {{expected:?}}")
+    }}
+
+    fn expected_classes(&self) -> Vec<TerminalClass> {{
+        self.actions[self.current_state_number()]
+            .iter()
+            .enumerate()
+            .filter_map(|(i, a)| {{
+                match a {{
+                    Action::Error => None,
+                    _ => Some(TerminalClass::from(i)),
+                }}
+            }}).collect()
     }}
 
     fn reduce_rule(&mut self, rule_number: usize) {{
@@ -346,13 +368,13 @@ pub struct NonTerminal {{
     class: NonTerminalClass,
 }}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Terminal {{
     class: TerminalClass,
     span: Span,
 }}
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Span {{
     start_pos: usize,
     end_pos: usize,
@@ -448,6 +470,32 @@ impl Span {{
             writeln!(symbol_file, "{tabs}{name},")?;
         }
         writeln!(symbol_file, "}}")
+    }
+
+    fn write_terminal_class_from_impl(&self, symbol_file: &mut File) -> Result<(), std::io::Error> {
+        write!(
+            symbol_file,
+            r#"
+impl From<usize> for TerminalClass {{
+    fn from(value: usize) -> Self {{
+        match value {{
+"#
+        )?;
+
+        let tabs = Tabs::new(3);
+        for (i, (_, name)) in self.terminals.iter().enumerate() {
+            writeln!(symbol_file, "{tabs}{i} => TerminalClass::{name},")?;
+        }
+        write!(symbol_file, "{tabs}_ => panic!()")?;
+
+        write!(
+            symbol_file,
+            r#"
+        }}
+    }}
+}}
+        "#
+        )
     }
 
     fn action_string(&self, action: &Action) -> String {
