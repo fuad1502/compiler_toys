@@ -8,16 +8,16 @@ use crate::{
     regex_parser::{self, RegexNode, RegexTerminal},
 };
 
-pub struct LexerGenerator {
-    token_specs: Vec<TokenSpec>,
+pub struct LexerGenerator<'a> {
+    pub token_specs: &'a Vec<TokenSpec>,
     pub states: Vec<State>,
     pub initial_states: Vec<usize>,
 }
 
 #[derive(Debug)]
 pub struct State {
-    accepts: Option<usize>,
-    next: HashMap<char, usize>,
+    pub accepts: Option<usize>,
+    pub next: HashMap<char, usize>,
 }
 
 #[derive(Debug)]
@@ -34,8 +34,8 @@ struct Cache {
     nullable_table: HashMap<Rc<RegexNode>, bool>,
 }
 
-impl LexerGenerator {
-    pub fn new(token_specs: Vec<TokenSpec>) -> Self {
+impl<'a> LexerGenerator<'a> {
+    pub fn new(token_specs: &'a Vec<TokenSpec>) -> Self {
         Self {
             token_specs,
             states: vec![],
@@ -45,7 +45,7 @@ impl LexerGenerator {
     }
 
     fn fill_states(mut self) -> Self {
-        for token_spec in &self.token_specs {
+        for token_spec in self.token_specs {
             let dfa = Self::create_dfa(&token_spec.pattern);
 
             let dfa_root_idx = self.states.len();
@@ -304,10 +304,11 @@ mod test {
     fn number() {
         let number = TokenSpec {
             id: 0,
+            name: "Number".to_string(),
             pattern: "\\d\\d*".to_string(),
         };
         let token_specs = vec![number];
-        let lexer_generator = LexerGenerator::new(token_specs);
+        let lexer_generator = LexerGenerator::new(&token_specs);
         assert_eq!(&lexer_generator.initial_states, &vec![0]);
         assert_eq!(&lexer_generator.states[0].accepts, &None);
         assert_eq!(

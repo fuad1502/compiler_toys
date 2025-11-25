@@ -4,27 +4,37 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{TokenSpec, lexer_generator::LexerGenerator};
+use crate::{
+    TokenSpec,
+    lexer_generator::{LexerGenerator, State},
+};
 
-pub fn generate_lexer(
-    token_specs: Vec<TokenSpec>,
+pub fn generate(
+    token_specs: &Vec<TokenSpec>,
     output_directory: &Path,
 ) -> Result<(), std::io::Error> {
     CodeGen::new(token_specs, output_directory)?.generate()
 }
 
-struct CodeGen {
+struct CodeGen<'a> {
     file: File,
-    lexer_generator: LexerGenerator,
+    token_specs: &'a Vec<TokenSpec>,
+    states: Vec<State>,
+    initial_states: Vec<usize>,
 }
 
-impl CodeGen {
-    fn new(token_specs: Vec<TokenSpec>, output_directory: &Path) -> Result<Self, std::io::Error> {
+impl<'a> CodeGen<'a> {
+    fn new(
+        token_specs: &'a Vec<TokenSpec>,
+        output_directory: &Path,
+    ) -> Result<Self, std::io::Error> {
         let file = Self::create_file_at("lexer.rs", output_directory)?;
         let lexer_generator = LexerGenerator::new(token_specs);
         Ok(Self {
             file,
-            lexer_generator,
+            token_specs: lexer_generator.token_specs,
+            states: lexer_generator.states,
+            initial_states: lexer_generator.initial_states,
         })
     }
 
@@ -52,21 +62,25 @@ impl CodeGen {
     }
 
     fn write_uses(&mut self) -> Result<(), std::io::Error> {
-        write!(
+        writeln!(
             self.file,
             r#"use std::{{collections::HashMap, fs::File, io::Read, path::Path}};
 
 use crate::symbol::{{Span, Terminal, TerminalClass}};
-        "#
+"#
         )
     }
 
     fn write_num_of_states(&mut self) -> Result<(), std::io::Error> {
-        write!(self.file, r#""#)
+        writeln!(
+            self.file,
+            "static NUM_OF_STATES: usize = {};",
+            self.states.len()
+        )
     }
 
     fn write_structs(&mut self) -> Result<(), std::io::Error> {
-        write!(
+        writeln!(
             self.file,
             r#"
 #[derive(Copy, Clone)]
@@ -83,7 +97,6 @@ pub struct Lexer {{
     transition_table: Vec<HashMap<char, usize>>,
     states_stack: Vec<Vec<usize>>,
 }}
-
 "#
         )
     }
@@ -106,15 +119,58 @@ pub struct Lexer {{
     }
 
     fn write_states(&mut self) -> Result<(), std::io::Error> {
-        writeln!(self.file, "        let states = vec![];")
+        Self::write_tab(&mut self.file, 2)?;
+        writeln!(self.file, "let states = [")?;
+        for state in &self.states {
+            Self::write_tab(&mut self.file, 3)?;
+            match state.accepts {
+                None => writeln!(self.file, "State {{ class: None }},")?,
+                Some(id) => {
+                    let token_name = &self.token_specs[id].name;
+                    writeln!(
+                        self.file,
+                        "State {{ class: Some(TerminalClass::{token_name}) }},"
+                    )?
+                }
+            }
+        }
+        Self::write_tab(&mut self.file, 2)?;
+        writeln!(self.file, "];")
     }
 
     fn write_initial_states(&mut self) -> Result<(), std::io::Error> {
-        writeln!(self.file, "        let initial_states = vec![];")
+        write!(self.file, "        let initial_states = vec![")?;
+        for (i, state) in self.initial_states.iter().enumerate() {
+            write!(self.file, "{state}")?;
+            if i != self.initial_states.len() - 1 {
+                write!(self.file, ", ")?;
+            }
+        }
+        writeln!(self.file, "];")
     }
 
     fn write_transition_table(&mut self) -> Result<(), std::io::Error> {
-        writeln!(self.file, "        let transition_table = vec![];")
+        for (id, state) in self.states.iter().enumerate() {
+            Self::write_tab(&mut self.file, 2)?;
+            let mut_attr = if state.next.is_empty() { "" } else { "mut" };
+            writeln!(
+                self.file,
+                "let {mut_attr} state_{id}_transitions = HashMap::new();"
+            )?;
+            for (ch, next) in &state.next {
+                Self::write_tab(&mut self.file, 2)?;
+                writeln!(self.file, "state_{id}_transitions.insert('{ch}', {next});")?;
+            }
+        }
+
+        Self::write_tab(&mut self.file, 2)?;
+        writeln!(self.file, "let transition_table = vec![")?;
+        for id in 0..self.states.len() {
+            Self::write_tab(&mut self.file, 3)?;
+            writeln!(self.file, "state_{id}_transitions,")?;
+        }
+        Self::write_tab(&mut self.file, 2)?;
+        writeln!(self.file, "];")
     }
 
     fn write_impl_new_footer(&mut self) -> Result<(), std::io::Error> {
@@ -261,5 +317,10 @@ pub struct Lexer {{
     }}
 "#
         )
+    }
+
+    fn write_tab(file: &mut File, indent: usize) -> Result<(), std::io::Error> {
+        let tab = "    ";
+        write!(file, "{}", tab.repeat(indent))
     }
 }

@@ -221,7 +221,7 @@ impl Parser {
         let terminal_name = self.lexer.get_lexeme(&token);
         let terminal = Terminal::Other(self.terminals.len() - 1);
         self.terminals.push((terminal, terminal_name.to_string()));
-        let token_spec = TokenSpec::new(self.token_specs.len(), pattern);
+        let token_spec = TokenSpec::new(self.token_specs.len(), terminal_name.to_string(), pattern);
         self.token_specs.push(token_spec);
     }
 

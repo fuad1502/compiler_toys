@@ -6,6 +6,8 @@ use std::{
     rc::Rc,
 };
 
+use lexer_generator::TokenSpec;
+
 use crate::{
     NonTerminal, Rule, Symbol, Terminal,
     parse_table_gen::{Action, ParseTableGen},
@@ -13,6 +15,7 @@ use crate::{
 };
 
 pub struct CodeGen {
+    token_specs: Vec<TokenSpec>,
     parse_table_gen: ParseTableGen,
     terminals: Vec<(Terminal, String)>,
     non_terminals: Vec<(NonTerminal, String)>,
@@ -23,6 +26,7 @@ impl CodeGen {
     pub fn new(yalr_file: YalrFile) -> Self {
         let parse_table_gen = ParseTableGen::new(&yalr_file);
         Self {
+            token_specs: yalr_file.token_specs,
             parse_table_gen,
             terminals: yalr_file.terminals,
             non_terminals: yalr_file.non_terminals,
@@ -31,6 +35,8 @@ impl CodeGen {
     }
 
     pub fn generate(&self, output_directory: &Path) -> Result<(), String> {
+        lexer_generator::generate(&self.token_specs, output_directory)
+            .map_err(|e| e.to_string())?;
         let mut parser_file = Self::create_file_at("parser.rs", output_directory)?;
         self.write_parser_file(&mut parser_file)
             .map_err(|e| e.to_string())?;
