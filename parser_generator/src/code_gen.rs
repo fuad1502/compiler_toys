@@ -364,8 +364,8 @@ pub enum Symbol {{
 }}
 
 pub struct NonTerminal {{
-    rule: Rule,
-    class: NonTerminalClass,
+    pub rule: Rule,
+    pub class: NonTerminalClass,
 }}
 
 #[derive(Clone, Debug)]
@@ -381,8 +381,8 @@ pub struct Span {{
 }}
 
 pub struct Rule {{
-    components: Vec<Symbol>,
-    number: usize,
+    pub components: Vec<Symbol>,
+    pub number: usize,
 }}
 
 impl Symbol {{

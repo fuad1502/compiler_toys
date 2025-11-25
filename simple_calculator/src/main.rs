@@ -1,17 +1,25 @@
-use std::process::ExitCode;
+use std::{
+    io::{self, Write},
+    process::ExitCode,
+};
 
-use simple_calculator::{lexer::Lexer, parser::Parser};
+use simple_calculator::calculate;
 
 fn main() -> ExitCode {
-    let mut lexer = Lexer::from_source_str("1 + (2 + 3 * 4 + 5) + 6");
-    let mut parser = Parser::new();
-    let root = match parser.parse(&mut lexer) {
-        Ok(node) => node,
-        Err(e) => {
-            eprintln!("{e}");
-            return ExitCode::FAILURE;
+    let stdin = io::stdin();
+    loop {
+        print!(">>> ");
+        io::stdout().flush().unwrap();
+
+        let mut line = String::new();
+        let size = stdin.read_line(&mut line).unwrap();
+        if size == 0 {
+            break ExitCode::SUCCESS;
         }
-    };
-    root.pretty_print(&lexer, 0);
-    ExitCode::SUCCESS
+
+        match calculate(&line) {
+            Ok(res) => println!("{res}"),
+            Err(e) => eprintln!("{e}"),
+        };
+    }
 }
