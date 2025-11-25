@@ -211,6 +211,7 @@ pub struct Lexer {{
 
     pub fn peek_token(&mut self) -> Result<&Terminal, String> {{
         if self.current_token.is_none() {{
+            self.skip_whitespaces();
             if self.peek_char().is_none() {{
                 let end_token = Terminal::new(TerminalClass::End, self.current_span());
                 self.current_token = Some(end_token);
@@ -231,7 +232,6 @@ pub struct Lexer {{
     }}
 
     fn get(&mut self) -> Result<Terminal, String> {{
-        self.skip_whitespaces();
         loop {{
             match self.peek_char() {{
                 Some(c) => {{
