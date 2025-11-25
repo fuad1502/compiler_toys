@@ -9,5 +9,5 @@ fn main() {
         eprintln!("{}", e);
         panic!("Failed to compile yalr file!");
     }
-    println!("cargo:rerun-if-changed=yalr/simple_calculator.rs");
+    println!("cargo:rerun-if-changed=yalr/simple_calculator.yalr");
 }
