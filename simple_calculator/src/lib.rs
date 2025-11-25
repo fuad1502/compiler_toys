@@ -1,8 +1,10 @@
 use crate::{evaluator::Evaluator, lexer::Lexer, parser::Parser, visitor::Visitor};
 
 mod evaluator;
+#[allow(unused)]
 mod lexer;
 mod parser;
+#[allow(unused)]
 mod symbol;
 mod visitor;
 
