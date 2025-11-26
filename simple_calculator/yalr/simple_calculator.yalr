@@ -1,16 +1,24 @@
 %TERMINALS
 Number("\d\d*")
 Plus("+")
+Minus("-")
 Star("\*")
+Slash("/")
 LeftParen("\(")
 RightParen("\)")
 %RULES
 E = E Plus E
+| E Minus E
 | E Star E
+| E Slash E
 | LeftParen E RightParen
 | Number;
 %PRIORITIES
-E(2)
+E(3)
+E(4)
 Star
+Slash
 E(1)
+E(2)
 Plus
+Minus

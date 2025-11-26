@@ -18,7 +18,7 @@ fn main() -> ExitCode {
         }
 
         match calculate(&line) {
-            Ok(res) => println!("{res}"),
+            Ok(res) => println!("Result = {res}"),
             Err(e) => eprintln!("{e}"),
         };
     }
