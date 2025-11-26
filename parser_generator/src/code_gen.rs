@@ -358,11 +358,13 @@ impl Default for Parser {{
             symbol_file,
             r#"use super::lexer::Lexer;
 
+#[derive(Debug)]
 pub enum Symbol {{
     NonTerminal(NonTerminal),
     Terminal(Terminal),
 }}
 
+#[derive(Debug)]
 pub struct NonTerminal {{
     pub rule: Rule,
     pub class: NonTerminalClass,
@@ -380,6 +382,7 @@ pub struct Span {{
     end_pos: usize,
 }}
 
+#[derive(Debug)]
 pub struct Rule {{
     pub components: Vec<Symbol>,
     pub number: usize,
