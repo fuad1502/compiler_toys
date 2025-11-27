@@ -1,22 +1,17 @@
 mod code_gen;
-mod lexer_generator;
+mod lexer_spec;
 mod regex_parser;
 
 pub use code_gen::generate;
 
 pub struct TokenSpec {
-    id: usize,
     name: String,
     pattern: String,
 }
 
 impl TokenSpec {
-    pub fn new(id: usize, name: String, pattern: String) -> Self {
-        Self { id, name, pattern }
-    }
-
-    pub fn id(&self) -> usize {
-        self.id
+    pub fn new(name: String, pattern: String) -> Self {
+        Self { name, pattern }
     }
 
     pub fn pattern(&self) -> &str {

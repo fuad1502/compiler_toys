@@ -1,7 +1,7 @@
 use core::{cmp::PartialEq, hash::Hash};
 use std::{collections::HashMap, rc::Rc};
 
-use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule, yalr_file::YalrFile};
+use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule, gg::Gg};
 
 #[derive(PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Debug)]
 struct Item {
@@ -23,7 +23,7 @@ pub enum Action {
     Error,
 }
 
-pub struct ParseTableGen {
+pub struct ParseTable {
     pub terminals: Vec<Terminal>,
     pub non_terminals: Vec<NonTerminal>,
     rules: Vec<Rc<Rule>>,
@@ -37,20 +37,20 @@ pub struct ParseTableGen {
     rule_to_index: HashMap<Rc<Rule>, usize>,
 }
 
-impl ParseTableGen {
-    pub fn new(yalr_file: &YalrFile) -> Self {
-        let terminals: Vec<Terminal> = yalr_file.terminals.iter().map(|t| t.0).collect();
-        let non_terminals: Vec<NonTerminal> = yalr_file.non_terminals.iter().map(|t| t.0).collect();
+impl ParseTable {
+    pub fn new(gg: &Gg) -> Self {
+        let terminals: Vec<Terminal> = gg.terminals.iter().map(|t| t.0).collect();
+        let non_terminals: Vec<NonTerminal> = gg.non_terminals.iter().map(|t| t.0).collect();
         let symbols = Self::chain_as_symbols(&terminals, &non_terminals);
         let mut rule_to_index = HashMap::new();
-        for (idx, rule) in yalr_file.rules.iter().enumerate() {
+        for (idx, rule) in gg.rules.iter().enumerate() {
             rule_to_index.insert(rule.clone(), idx);
         }
         Self {
             terminals,
             non_terminals,
-            priorities: yalr_file.priorities.clone(),
-            rules: yalr_file.rules.clone(),
+            priorities: gg.priorities.clone(),
+            rules: gg.rules.clone(),
             symbols,
             first_table: HashMap::new(),
             states: vec![],
@@ -391,12 +391,12 @@ impl Item {
 mod test {
     use core::assert_eq;
 
-    use crate::{parse_table_gen::ParseTableGen, yalr_file::YalrFile};
+    use crate::{gg::Gg, parse_table::ParseTable};
 
     #[test]
     fn main() {
-        let yalr_file = YalrFile::example();
-        let parse_table_gen = ParseTableGen::new(&yalr_file);
-        assert_eq!(parse_table_gen.states.len(), 10);
+        let gg = Gg::example();
+        let parse_table = ParseTable::new(&gg);
+        assert_eq!(parse_table.states.len(), 10);
     }
 }

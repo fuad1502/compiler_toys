@@ -6,37 +6,36 @@ use std::{
     rc::Rc,
 };
 
-use lexer_generator::TokenSpec;
+use jlek::TokenSpec;
 
 use crate::{
     NonTerminal, Rule, Symbol, Terminal,
-    parse_table_gen::{Action, ParseTableGen},
-    yalr_file::YalrFile,
+    gg::Gg,
+    parse_table::{Action, ParseTable},
 };
 
 pub struct CodeGen {
     token_specs: Vec<TokenSpec>,
-    parse_table_gen: ParseTableGen,
+    parse_table: ParseTable,
     terminals: Vec<(Terminal, String)>,
     non_terminals: Vec<(NonTerminal, String)>,
     rules: Vec<Rc<Rule>>,
 }
 
 impl CodeGen {
-    pub fn new(yalr_file: YalrFile) -> Self {
-        let parse_table_gen = ParseTableGen::new(&yalr_file);
+    pub fn new(gg: Gg) -> Self {
+        let parse_table = ParseTable::new(&gg);
         Self {
-            token_specs: yalr_file.token_specs,
-            parse_table_gen,
-            terminals: yalr_file.terminals,
-            non_terminals: yalr_file.non_terminals,
-            rules: yalr_file.rules,
+            token_specs: gg.token_specs,
+            parse_table,
+            terminals: gg.terminals,
+            non_terminals: gg.non_terminals,
+            rules: gg.rules,
         }
     }
 
     pub fn generate(&self, output_directory: &Path) -> Result<(), String> {
-        lexer_generator::generate(&self.token_specs, output_directory)
-            .map_err(|e| e.to_string())?;
+        jlek::generate(&self.token_specs, output_directory).map_err(|e| e.to_string())?;
         let mut parser_file = Self::create_file_at("parser.rs", output_directory)?;
         self.write_parser_file(&mut parser_file)
             .map_err(|e| e.to_string())?;
@@ -124,7 +123,7 @@ enum Action {{
     fn write_parser_struct(&self, parser_file: &mut File) -> std::io::Result<()> {
         let number_of_terminals = self.terminals.len();
         let number_of_non_terminals = self.non_terminals.len();
-        let number_of_states = self.parse_table_gen.states.len();
+        let number_of_states = self.parse_table.states.len();
         let number_of_rules = self.rules.len();
         write!(
             parser_file,
@@ -172,11 +171,11 @@ enum Action {{
     fn write_actions_field(&self, parser_file: &mut File, tabs: &mut Tabs) -> std::io::Result<()> {
         writeln!(parser_file, "{tabs}let actions = [")?;
         tabs.indent();
-        for state in &self.parse_table_gen.states {
+        for state in &self.parse_table.states {
             writeln!(parser_file, "{tabs}[")?;
             tabs.indent();
             for (terminal, _) in &self.terminals {
-                let action = &self.parse_table_gen.action_table[state][terminal];
+                let action = &self.parse_table.action_table[state][terminal];
                 writeln!(parser_file, "{tabs}Action::{},", self.action_string(action))?;
             }
             tabs.deindent();
@@ -193,20 +192,20 @@ enum Action {{
     ) -> std::io::Result<()> {
         writeln!(parser_file, "{tabs}let next_states = [")?;
         tabs.indent();
-        for state in &self.parse_table_gen.states {
+        for state in &self.parse_table.states {
             writeln!(parser_file, "{tabs}[")?;
             tabs.indent();
             for (non_terminal, _) in &self.non_terminals {
-                if self.parse_table_gen.goto_table.contains_key(state)
-                    && self.parse_table_gen.goto_table[state]
+                if self.parse_table.goto_table.contains_key(state)
+                    && self.parse_table.goto_table[state]
                         .contains_key(&Symbol::NonTerminal(*non_terminal))
                 {
-                    let next_state = &self.parse_table_gen.goto_table[state]
-                        [&Symbol::NonTerminal(*non_terminal)];
+                    let next_state =
+                        &self.parse_table.goto_table[state][&Symbol::NonTerminal(*non_terminal)];
                     writeln!(
                         parser_file,
                         "{tabs}Some({}),",
-                        self.parse_table_gen.get_state_index(next_state)
+                        self.parse_table.get_state_index(next_state)
                     )?;
                 } else {
                     writeln!(parser_file, "{tabs}None, ")?;
@@ -504,10 +503,10 @@ impl From<usize> for TerminalClass {{
     fn action_string(&self, action: &Action) -> String {
         match action {
             Action::Shift(state) => {
-                format!("Shift({})", self.parse_table_gen.get_state_index(state))
+                format!("Shift({})", self.parse_table.get_state_index(state))
             }
             Action::Reduce(rule) => {
-                format!("Reduce({})", self.parse_table_gen.get_rule_index(rule))
+                format!("Reduce({})", self.parse_table.get_rule_index(rule))
             }
             Action::Accept => "Accept".to_string(),
             Action::Error => "Error".to_string(),

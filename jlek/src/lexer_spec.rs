@@ -8,7 +8,7 @@ use crate::{
     regex_parser::{self, RegexNode, RegexTerminal},
 };
 
-pub struct LexerGenerator<'a> {
+pub struct LexerSpec<'a> {
     pub token_specs: &'a Vec<TokenSpec>,
     pub states: Vec<State>,
     pub initial_states: Vec<usize>,
@@ -16,7 +16,7 @@ pub struct LexerGenerator<'a> {
 
 #[derive(Debug)]
 pub struct State {
-    pub accepts: Option<usize>,
+    pub accepts: Option<String>,
     pub next: HashMap<char, usize>,
 }
 
@@ -34,7 +34,7 @@ struct Cache {
     nullable_table: HashMap<Rc<RegexNode>, bool>,
 }
 
-impl<'a> LexerGenerator<'a> {
+impl<'a> LexerSpec<'a> {
     pub fn new(token_specs: &'a Vec<TokenSpec>) -> Self {
         Self {
             token_specs,
@@ -52,7 +52,7 @@ impl<'a> LexerGenerator<'a> {
             self.initial_states.push(dfa_root_idx);
 
             for dfa_state in dfa {
-                let accepts = dfa_state.is_accepting().then_some(token_spec.id);
+                let accepts = dfa_state.is_accepting().then_some(token_spec.name.clone());
                 let next = dfa_state
                     .next
                     .iter()
@@ -298,21 +298,20 @@ impl RegexNode {
 mod test {
     use std::collections::HashMap;
 
-    use crate::{TokenSpec, lexer_generator::LexerGenerator};
+    use crate::{TokenSpec, lexer_spec::LexerSpec};
 
     #[test]
     fn number() {
         let number = TokenSpec {
-            id: 0,
             name: "Number".to_string(),
             pattern: "\\d\\d*".to_string(),
         };
         let token_specs = vec![number];
-        let lexer_generator = LexerGenerator::new(&token_specs);
-        assert_eq!(&lexer_generator.initial_states, &vec![0]);
-        assert_eq!(&lexer_generator.states[0].accepts, &None);
+        let lexer_spec = LexerSpec::new(&token_specs);
+        assert_eq!(&lexer_spec.initial_states, &vec![0]);
+        assert_eq!(&lexer_spec.states[0].accepts, &None);
         assert_eq!(
-            &lexer_generator.states[0].next,
+            &lexer_spec.states[0].next,
             &HashMap::from([
                 ('0', 1),
                 ('1', 1),
@@ -326,9 +325,9 @@ mod test {
                 ('9', 1),
             ])
         );
-        assert_eq!(&lexer_generator.states[1].accepts, &Some(0));
+        assert_eq!(&lexer_spec.states[1].accepts, &Some("Number".to_string()));
         assert_eq!(
-            &lexer_generator.states[1].next,
+            &lexer_spec.states[1].next,
             &HashMap::from([
                 ('0', 1),
                 ('1', 1),

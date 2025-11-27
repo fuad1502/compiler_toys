@@ -1,13 +1,13 @@
 use std::{collections::HashMap, rc::Rc};
 
-use lexer_generator::TokenSpec;
+use jlek::TokenSpec;
 
 use crate::{
     NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule,
-    yalr_file::{error::SpannedError, lexer},
+    gg::{error::SpannedError, lexer},
 };
 
-use super::{YalrFile, lexer::Lexer};
+use super::{Gg, lexer::Lexer};
 
 pub struct Parser {
     lexer: Lexer,
@@ -30,7 +30,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(mut self) -> Result<YalrFile, String> {
+    pub fn parse(mut self) -> Result<Gg, String> {
         if let Err(err) = self.root() {
             return Err(err.report(&self.lexer));
         }
@@ -39,7 +39,7 @@ impl Parser {
             symbols: vec![Symbol::NonTerminal(self.non_terminals[1].0)],
         };
         self.rules.insert(0, Rc::new(rule_acc));
-        Ok(YalrFile {
+        Ok(Gg {
             terminals: self.terminals,
             non_terminals: self.non_terminals,
             rules: self.rules,
@@ -221,7 +221,7 @@ impl Parser {
         let terminal_name = self.lexer.get_lexeme(&token);
         let terminal = Terminal::Other(self.terminals.len() - 1);
         self.terminals.push((terminal, terminal_name.to_string()));
-        let token_spec = TokenSpec::new(self.token_specs.len(), terminal_name.to_string(), pattern);
+        let token_spec = TokenSpec::new(terminal_name.to_string(), pattern);
         self.token_specs.push(token_spec);
     }
 
@@ -324,59 +324,54 @@ mod test {
 
     use crate::{
         NonTerminal, Terminal, TerminalOrRule,
-        yalr_file::{lexer::Lexer, parser::Parser},
+        gg::{lexer::Lexer, parser::Parser},
     };
 
     #[test]
     fn main() {
-        let mut simple_calculator_yalr = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        simple_calculator_yalr.push("test/fixtures/simple_calculator.yalr");
-        let lexer = Lexer::new(&simple_calculator_yalr).unwrap();
+        let mut simple_calculator_gg = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        simple_calculator_gg.push("test/fixtures/simple_calculator.gg");
+        let lexer = Lexer::new(&simple_calculator_gg).unwrap();
         let parser = Parser::new(lexer);
-        let yalr_file = parser.parse().unwrap();
+        let gg = parser.parse().unwrap();
 
         // Verify terminals field
-        assert_eq!(yalr_file.terminals.len(), 6);
+        assert_eq!(gg.terminals.len(), 6);
+        assert_eq!(gg.terminals[1], (Terminal::Other(0), "Number".to_string()));
         assert_eq!(
-            yalr_file.terminals[1],
-            (Terminal::Other(0), "Number".to_string())
-        );
-        assert_eq!(
-            yalr_file.terminals[5],
+            gg.terminals[5],
             (Terminal::Other(4), "RightParen".to_string())
         );
 
         // Verify non-terminals field
-        assert_eq!(yalr_file.non_terminals.len(), 2);
+        assert_eq!(gg.non_terminals.len(), 2);
         assert_eq!(
-            yalr_file.non_terminals[1],
+            gg.non_terminals[1],
             (NonTerminal { id: 1 }, "E".to_string())
         );
 
         // Verify rules field
-        assert_eq!(yalr_file.rules.len(), 5);
+        assert_eq!(gg.rules.len(), 5);
 
         // Verify priorities field
-        assert_eq!(yalr_file.priorities.len(), 4);
+        assert_eq!(gg.priorities.len(), 4);
         assert_eq!(
-            yalr_file
-                .priorities
-                .get(&TerminalOrRule::Rule(yalr_file.rules[2].clone()))
+            gg.priorities
+                .get(&TerminalOrRule::Rule(gg.rules[2].clone()))
                 .unwrap()
                 .assigned_priority,
             Some(usize::MAX)
         );
         assert_eq!(
-            yalr_file
-                .priorities
-                .get(&TerminalOrRule::Rule(yalr_file.rules[1].clone()))
+            gg.priorities
+                .get(&TerminalOrRule::Rule(gg.rules[1].clone()))
                 .unwrap()
                 .assigned_priority,
             Some(usize::MAX - 2)
         );
 
         // Verify token specs field
-        assert_eq!(yalr_file.token_specs.len(), 5);
-        assert_eq!(yalr_file.token_specs[0].pattern(), "\\d\\d*");
+        assert_eq!(gg.token_specs.len(), 5);
+        assert_eq!(gg.token_specs[0].pattern(), "\\d\\d*");
     }
 }

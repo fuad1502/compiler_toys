@@ -6,6 +6,7 @@ Star("\*")
 Slash("/")
 LeftParen("\(")
 RightParen("\)")
+
 %RULES
 E = E Plus E
 | E Minus E
@@ -13,11 +14,13 @@ E = E Plus E
 | E Slash E
 | LeftParen E RightParen
 | Number;
+
 %PRIORITIES
 E(3)
 E(4)
 Star
 Slash
+
 E(1)
 E(2)
 Plus

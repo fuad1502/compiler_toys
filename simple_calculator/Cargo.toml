@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [build-dependencies]
-parser_generator = { version="0.1.0", path="../parser_generator" }
+jjik = { version="0.1.0", path="../jjik" }

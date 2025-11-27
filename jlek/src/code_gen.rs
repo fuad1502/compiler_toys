@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     TokenSpec,
-    lexer_generator::{LexerGenerator, State},
+    lexer_spec::{LexerSpec, State},
 };
 
 pub fn generate(
@@ -16,25 +16,20 @@ pub fn generate(
     CodeGen::new(token_specs, output_directory)?.generate()
 }
 
-struct CodeGen<'a> {
+struct CodeGen {
     file: File,
-    token_specs: &'a Vec<TokenSpec>,
     states: Vec<State>,
     initial_states: Vec<usize>,
 }
 
-impl<'a> CodeGen<'a> {
-    fn new(
-        token_specs: &'a Vec<TokenSpec>,
-        output_directory: &Path,
-    ) -> Result<Self, std::io::Error> {
+impl CodeGen {
+    fn new(token_specs: &Vec<TokenSpec>, output_directory: &Path) -> Result<Self, std::io::Error> {
         let file = Self::create_file_at("lexer.rs", output_directory)?;
-        let lexer_generator = LexerGenerator::new(token_specs);
+        let lexer_spec = LexerSpec::new(token_specs);
         Ok(Self {
             file,
-            token_specs: lexer_generator.token_specs,
-            states: lexer_generator.states,
-            initial_states: lexer_generator.initial_states,
+            states: lexer_spec.states,
+            initial_states: lexer_spec.initial_states,
         })
     }
 
@@ -130,15 +125,12 @@ pub struct Lexer {{
         writeln!(self.file, "let states = [")?;
         for state in &self.states {
             Self::write_tab(&mut self.file, 3)?;
-            match state.accepts {
+            match &state.accepts {
                 None => writeln!(self.file, "State {{ class: None }},")?,
-                Some(id) => {
-                    let token_name = &self.token_specs[id].name;
-                    writeln!(
-                        self.file,
-                        "State {{ class: Some(TerminalClass::{token_name}) }},"
-                    )?
-                }
+                Some(token_name) => writeln!(
+                    self.file,
+                    "State {{ class: Some(TerminalClass::{token_name}) }},"
+                )?,
             }
         }
         Self::write_tab(&mut self.file, 2)?;

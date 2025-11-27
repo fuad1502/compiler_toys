@@ -1,4 +1,4 @@
-use crate::yalr_file::{
+use crate::gg::{
     lexer::{self, Lexer, Span},
     parser,
 };

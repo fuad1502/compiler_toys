@@ -4,11 +4,13 @@ Plus("+")
 Star("\*")
 LeftParen("\(")
 RightParen("\)")
+
 %RULES
 E = E Plus E
 | E Star E
 | LeftParen E RightParen
 | Number;
+
 %PRIORITIES
 E(2)
 Star

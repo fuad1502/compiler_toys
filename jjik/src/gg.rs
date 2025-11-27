@@ -5,11 +5,11 @@ mod parser;
 use std::rc::Rc;
 use std::{collections::HashMap, path::Path};
 
-use lexer_generator::TokenSpec;
+use jlek::TokenSpec;
 
 use crate::{NonTerminal, Priority, Rule, Symbol, Terminal, TerminalOrRule};
 
-pub struct YalrFile {
+pub struct Gg {
     pub terminals: Vec<(Terminal, String)>,
     pub non_terminals: Vec<(NonTerminal, String)>,
     pub rules: Vec<Rc<Rule>>,
@@ -17,9 +17,9 @@ pub struct YalrFile {
     pub token_specs: Vec<TokenSpec>,
 }
 
-impl YalrFile {
-    pub fn new(yalr_file: &Path) -> Result<Self, String> {
-        let lexer = lexer::Lexer::new(yalr_file).map_err(|e| format!("IO error: {e}"))?;
+impl Gg {
+    pub fn new(path: &Path) -> Result<Self, String> {
+        let lexer = lexer::Lexer::new(path).map_err(|e| format!("IO error: {e}"))?;
         let parser = parser::Parser::new(lexer);
         parser.parse()
     }
@@ -87,7 +87,7 @@ impl YalrFile {
         priorities.insert(TerminalOrRule::Rule(rules[1].clone()), Priority::new(2));
         priorities.insert(TerminalOrRule::Terminal(terminals[1]), Priority::new(1));
 
-        YalrFile {
+        Gg {
             terminals: terminals.into_iter().zip(terminal_names).collect(),
             non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
             rules,
@@ -128,7 +128,7 @@ impl YalrFile {
         let rules = vec![rule_acc, rule_0, rule_1, rule_2];
         let rules = rules.into_iter().map(Rc::new).collect();
 
-        YalrFile {
+        Gg {
             terminals: terminals.into_iter().zip(terminal_names).collect(),
             non_terminals: non_terminals.into_iter().zip(non_terminal_names).collect(),
             rules,

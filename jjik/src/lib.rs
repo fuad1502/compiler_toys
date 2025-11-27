@@ -1,7 +1,7 @@
 mod code_gen;
 pub mod driver;
-mod parse_table_gen;
-mod yalr_file;
+mod gg;
+mod parse_table;
 
 use std::rc::Rc;
 

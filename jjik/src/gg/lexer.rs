@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read, path::Path};
 
-use crate::yalr_file::error::SpannedError;
+use crate::gg::error::SpannedError;
 
 #[derive(Clone)]
 pub struct Token {
@@ -155,8 +155,8 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(yalr_file: &Path) -> Result<Self, std::io::Error> {
-        let mut file = File::open(yalr_file)?;
+    pub fn new(gg_path: &Path) -> Result<Self, std::io::Error> {
+        let mut file = File::open(gg_path)?;
         let mut source = String::new();
         let _ = file.read_to_string(&mut source)?;
         let chars = source.chars().map(|c| c as u8).collect::<Vec<u8>>();
@@ -425,13 +425,13 @@ impl std::error::Error for Error {}
 mod test {
     use std::path::PathBuf;
 
-    use crate::yalr_file::lexer::{Lexer, TokenClass};
+    use crate::gg::lexer::{Lexer, TokenClass};
 
     #[test]
     fn main() {
-        let mut simple_calculator_yalr = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        simple_calculator_yalr.push("test/fixtures/simple_calculator.yalr");
-        let mut lexer = Lexer::new(&simple_calculator_yalr).unwrap();
+        let mut simple_calculator_gg = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        simple_calculator_gg.push("test/fixtures/simple_calculator.gg");
+        let mut lexer = Lexer::new(&simple_calculator_gg).unwrap();
         let mut tokens = vec![];
         loop {
             let token = match lexer.next() {
