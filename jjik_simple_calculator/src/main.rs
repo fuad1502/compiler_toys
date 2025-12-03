@@ -1,3 +1,8 @@
+//! CLI tool for evaluating mathematical expressions.
+//!
+//! If given a valid mathematical expression, it will show both the concrete syntax tree
+//! representation of the expression and the result of the expression.
+
 use std::{
     io::{self, Write},
     process::ExitCode,
