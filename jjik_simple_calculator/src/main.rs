@@ -3,7 +3,7 @@ use std::{
     process::ExitCode,
 };
 
-use simple_calculator::calculate;
+use jjik_simple_calculator::calculate;
 
 fn main() -> ExitCode {
     let stdin = io::stdin();

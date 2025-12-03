@@ -10,16 +10,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "jjik_simple_calculator"
+version = "0.1.0"
+dependencies = [
+ "jjik",
+]
+
+[[package]]
 name = "jlek"
 version = "0.1.0"
 
 [[package]]
 name = "karat"
 version = "0.1.0"
-
-[[package]]
-name = "simple_calculator"
-version = "0.1.0"
-dependencies = [
- "jjik",
-]
