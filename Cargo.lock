@@ -21,10 +21,6 @@ name = "jlek"
 version = "0.1.0"
 
 [[package]]
-name = "karat"
-version = "0.1.0"
-
-[[package]]
 name = "oonta"
 version = "0.1.0"
 dependencies = [
