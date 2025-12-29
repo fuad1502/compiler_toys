@@ -8,4 +8,4 @@ for me whilst I am reading [Compilers: Principles, Techniques, & Tools](https://
 - Lexer Generator: [JLEK](https://github.com/fuad1502/compiler_toys/tree/master/jlek)
 - *JJIK* example:
 [jjik_simple_calculator](https://github.com/fuad1502/compiler_toys/tree/master/jjik_simple_calculator)
-- *Karat* Compiler: [Karat](https://github.com/fuad1502/compiler_toys/tree/master/karat)
+- OCaml Compiler: [Oonta](https://github.com/fuad1502/compiler_toys/tree/master/oonta)
