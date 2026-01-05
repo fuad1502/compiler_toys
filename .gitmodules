@@ -1,9 +1,11 @@
 [submodule "oonta"]
 	path = oonta
 	url = https://github.com/fuad1502/oonta.git
+	branch = master
 [submodule "jjik"]
 	path = jjik
 	url = https://github.com/fuad1502/jjik.git
+	branch = master
 [submodule "jlek"]
 	path = jlek
 	url = https://github.com/fuad1502/jlek.git
