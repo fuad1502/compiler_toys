@@ -1,3 +1,6 @@
 [submodule "oonta"]
 	path = oonta
 	url = https://github.com/fuad1502/oonta.git
+[submodule "jjik"]
+	path = jjik
+	url = https://github.com/fuad1502/jjik.git
