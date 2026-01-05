@@ -1,4 +1,4 @@
-# JJIK Simple Calculator
+# JJIK Simple Calculator 🧮
 
 This is an example project meant to show how to utilize [JJIK](https://github.com/fuad1502/compiler_toys/tree/master/jjik) for your parsing needs.
 
