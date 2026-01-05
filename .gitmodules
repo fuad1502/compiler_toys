@@ -4,3 +4,7 @@
 [submodule "jjik"]
 	path = jjik
 	url = https://github.com/fuad1502/jjik.git
+[submodule "jlek"]
+	path = jlek
+	url = https://github.com/fuad1502/jlek.git
+	branch = master
