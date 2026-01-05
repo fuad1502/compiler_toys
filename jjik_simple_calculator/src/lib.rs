@@ -36,10 +36,15 @@
 
 mod evaluator;
 #[allow(unused)]
-mod lexer;
-mod parser;
-#[allow(unused)]
-mod symbol;
+mod lexer {
+    include!(concat!(env!("OUT_DIR"), "/lexer.rs"));
+}
+mod parser {
+    include!(concat!(env!("OUT_DIR"), "/parser.rs"));
+}
+mod symbol {
+    include!(concat!(env!("OUT_DIR"), "/symbol.rs"));
+}
 
 use crate::{evaluator::Evaluator, lexer::Lexer, parser::Parser};
 
