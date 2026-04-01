@@ -1,6 +1,6 @@
 use crate::{
     lexer::Lexer,
-    symbol::{NonTerminal, Symbol, Terminal, TerminalClass},
+    symbol::{NonTerminal, RuleIDs, Symbol, Terminal, TerminalClass},
 };
 
 pub struct Evaluator<'a> {
@@ -20,14 +20,13 @@ impl<'a> Evaluator<'a> {
     }
 
     fn visit_non_terminal(&mut self, non_terminal: &NonTerminal) -> f32 {
-        match non_terminal.rule.number {
-            1 => self.visit_rule_add(&non_terminal.rule.components),
-            2 => self.visit_rule_substract(&non_terminal.rule.components),
-            3 => self.visit_rule_multiply(&non_terminal.rule.components),
-            4 => self.visit_rule_divide(&non_terminal.rule.components),
-            5 => self.visit_rule_parenthesize(&non_terminal.rule.components),
-            6 => self.visit_rule_number(&non_terminal.rule.components),
-            _ => unreachable!(),
+        match non_terminal.rule.id {
+            RuleIDs::E0 => self.visit_rule_add(&non_terminal.rule.components),
+            RuleIDs::E1 => self.visit_rule_substract(&non_terminal.rule.components),
+            RuleIDs::E2 => self.visit_rule_multiply(&non_terminal.rule.components),
+            RuleIDs::E3 => self.visit_rule_divide(&non_terminal.rule.components),
+            RuleIDs::E4 => self.visit_rule_parenthesize(&non_terminal.rule.components),
+            RuleIDs::E5 => self.visit_rule_number(&non_terminal.rule.components),
         }
     }
 

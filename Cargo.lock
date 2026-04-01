@@ -4,25 +4,40 @@ version = 4
 
 [[package]]
 name = "jjik"
-version = "0.1.0"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6c19892f31cc5f14e6cb708d370ebc3ed3e81d76b9a0a6614d8e059af9dd6d1"
 dependencies = [
- "jlek",
+ "jlek 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "jjik"
+version = "0.3.0"
+dependencies = [
+ "jlek 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "jjik_simple_calculator"
 version = "0.1.0"
 dependencies = [
- "jjik",
+ "jjik 0.3.0",
 ]
 
 [[package]]
 name = "jlek"
-version = "0.1.0"
+version = "0.1.3"
+
+[[package]]
+name = "jlek"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcceca14bda8e0e83a351ea2acf394cc369504283ce4188f5c2ee9e591a0fdf4"
 
 [[package]]
 name = "oonta"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
- "jjik",
+ "jjik 0.2.0",
 ]
